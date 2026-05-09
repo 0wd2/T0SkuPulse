@@ -1671,7 +1671,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             textposition='outside',
         ), row=1, col=2)
 
-        top_y1 = max(v_total) + 100
+        top_y1 = max(v_total) + 200
         for i, row in df_inter.iterrows():
             start_y = max(row["有干预样本数"], row["有效干预数"])  
             fig.add_shape(
