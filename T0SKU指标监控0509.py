@@ -74,7 +74,7 @@ st.markdown("""
 with st.sidebar:
     st.header("⚙️ 配置参数")
     today = date.today()
-    default_monday = today - timedelta(days=today.weekday())
+    default_monday = today - timedelta(days=today.weekday()) - timedelta(days=7)
     t0_date_val = st.date_input("🗓️ 当前周周一", value=default_monday)
     st.session_state.t0_date = t0_date_val
 
@@ -843,9 +843,14 @@ def plot_top_categories_by_rate(df_fahuo, filters,filter_market):
     
     with col_ctrl2:
         st.markdown(f"#### 🔍发货指标下钻分析-[{filter_market}] MRPSKU")
-
+        if st.session_state.filter_market=="全部市场":
+            df_market=df.copy()
+        else:
+            df_market=df[df['子市场'] == filter_market]
+        
+        # st.session_state.filter_market = filter_market
         # 1. 获取该市场下的所有品类，供用户选择
-        df_market = df[df['子市场'] == filter_market]
+        # df_market = df[df['子市场'] == filter_market]
         # df_market = df.copy()
         category_list = sorted(df_market['品类'].unique().tolist())
         
@@ -2165,7 +2170,10 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
         )
         
         # 1. 数据处理
-        df_category = df[df['子市场'] == st.session_state.filter_market]
+        if st.session_state.filter_market=="全部市场":
+            df_category=df.copy()
+        else:
+            df_category = df[df['子市场'] == st.session_state.filter_market]
         df_cat_rate = df_category.groupby("品类")[metric].mean().reset_index()
 
         # 排序：按达成率降序排列，最好的在上面
@@ -2270,7 +2278,10 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
         )
 
         # 1. 获取该市场下的所有品类，供用户选择
-        df_market = df[df['子市场'] == st.session_state.filter_market]
+        if st.session_state.filter_market=="全部市场":
+            df_market=df.copy()
+        else:
+            df_market = df[df['子市场'] == st.session_state.filter_market]
         # df_market = df.copy()
         category_list = sorted(df_market['品类'].unique().tolist())
         
