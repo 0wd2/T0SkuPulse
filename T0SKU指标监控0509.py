@@ -52,7 +52,6 @@ if "df_country_stock" not in st.session_state: st.session_state.df_country_stock
 if "filter_market" not in st.session_state: st.session_state.filter_market = None
 if "df_country_turnover" not in st.session_state: st.session_state.df_country_turnover = None
 if "df_stock_turnover" not in st.session_state: st.session_state.df_stock_turnover = None
-
 st.markdown("""
         <style>
         /* 1. 强制放大 Label (指标名称) */
@@ -350,7 +349,7 @@ with fixed_container:
                 }}
                 </style>
                 """, unsafe_allow_html=True)
-            c1.metric("海外在库周转",历史海外在库周转,"目标: 第一阶段：45天",delta_color="green",help="(期初在库x单价+期末在库x单价)/2/(周销x单价/7)")
+            c1.metric("海外在库周转",历史海外在库周转,"目标: P1:45天,P2:30天",delta_color="green",help="(期初在库x单价+期末在库x单价)/2/(周销x单价/7)")
             c2.metric("海外在途周转",历史海外在途周转,"目标: 60天",delta_color="green",help="(期初在途x单价+期末在途x单价)/2/(周销x单价/7)")
             c3.metric("国内在库周转", f"{历史国内在库周转:.1f}", delta=f"目标: 60天", delta_color="green",help="(国内期初在库x单价+国内期末在库x单价)/2/(周销x单价/7)")
             c4.metric("预测偏差率", f"{curr_avg_yuce:.1%}",delta="目标: 27%",delta_color="green")
@@ -1151,12 +1150,15 @@ def predictSales_rate_area(df_yuce, curr_filters):
     with market_filter:
         market_list = ["全部市场"] + sorted(df["子市场"].unique().tolist())
         selected_market = st.selectbox("选择要查看的子市场", market_list,key="selectbox_market_yuce")
+        st.session_state.yuce_filter_market=selected_market
     with category_filter:
         category_list = ["全部品类"] + sorted(df["品类"].unique().tolist())
         selected_category = st.selectbox("选择要查看的品类", category_list,key="selectbox_category_yuce")
+        st.session_state.yuce_filter_category=selected_category
     with sku_filter:
         SKU_list = ["全部SKU"] + sorted(df["主料mrpsku"].unique().tolist())
         selected_sku = st.selectbox("选择要查看的SKU", SKU_list,key="selectbox_sku_yuce")
+        st.session_state.yuce_filter_sku=selected_sku
 
     if selected_market == "全部市场":
         df_filtered = df
@@ -1320,7 +1322,12 @@ def predictSales_rate_area(df_yuce, curr_filters):
     df_cat["偏差情况"] = df_cat.apply(get_color, axis=1)
     
     with col_right:
-        st.markdown("#### 预测情况下钻-品类 健康度象限 (偏差 vs 环比)")
+        st.markdown(
+            f"""
+            #### 预测情况下钻-<span style='color: #ff4b4b;'>{st.session_state.yuce_filter_market}</span> 品类健康度象限 (偏差 vs 环比)
+            """, 
+            unsafe_allow_html=True
+        )
         fig_cat = px.scatter(
             df_cat,
             x="单周预测偏差率",
@@ -1397,7 +1404,12 @@ def predictSales_rate_area(df_yuce, curr_filters):
     df_cat['单周预测偏差率'] = round(df_cat['单周预测偏差率']*100, 1)
     df_cat['环比预测偏差率'] = round(df_cat['环比预测偏差率']*100, 1)
     with detail_cat:
-        st.markdown("#### 品类明细表")
+        st.markdown(
+            f"""
+            #### 预测情况下钻-<span style='color: #ff4b4b;'>{st.session_state.yuce_filter_market}</span> 品类明细表
+            """, 
+            unsafe_allow_html=True
+        )
         def color_deviation(val):
             color = '#cf1322' if abs(val) > 0.3 else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > 0.3 else f'color: {color}'
@@ -1431,7 +1443,12 @@ def predictSales_rate_area(df_yuce, curr_filters):
         },
          width="stretch", height=300, hide_index=True)
     with detail_sku:
-        st.markdown("#### 预测情况下钻-MRPSKU")
+        st.markdown(
+            f"""
+            #### 预测情况下钻-<span style='color: #ff4b4b;'>{st.session_state.yuce_filter_market}_{st.session_state.yuce_filter_category}</span> MRPSKU明细表
+            """, 
+            unsafe_allow_html=True
+        )
         df_detail = df_filtered[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值","上周预测值" ,"单周预测偏差率", "环比预测偏差率"]].copy()
         df_detail=df_detail.sort_values("单周预测偏差率", ascending=False)
         df_detail['单周预测偏差率'] = round(df_detail['单周预测偏差率']*100, 1)
@@ -1495,12 +1512,15 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
     with market_filter:
         market_list = ["全部市场"] + sorted(df["子市场"].unique().tolist())
         selected_market = st.selectbox("选择要查看的子市场", market_list,key="selectbox_market_ganyu")
+        st.session_state.ganyu_filter_market=selected_market
     with category_filter:
         category_list = ["全部品类"] + sorted(df["品类"].unique().tolist())
         selected_category = st.selectbox("选择要查看的品类", category_list,key="selectbox_category_ganyu")
+        st.session_state.ganyu_filter_category=selected_category
     with sku_filter:
         SKU_list = ["全部SKU"] + sorted(df["主料mrpsku"].unique().tolist())
         selected_sku = st.selectbox("选择要查看的SKU", SKU_list,key="selectbox_sku_ganyu")
+        st.session_state.ganyu_filter_sku=selected_sku
 
     if selected_market == "全部市场":
         df_filtered = df
@@ -1519,6 +1539,8 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
     
     with col_left:
         st.markdown("#### 干预SKU占比")
+        if st.session_state.ganyu_filter_market != "全部市场":
+            df_ganyu_bi=df_ganyu_bi[df_ganyu_bi["子市场"] == st.session_state.ganyu_filter_market]
         df_inter = df_ganyu_bi.sort_values("有干预样本数", ascending=False)
         df_inter["有效干预数"] = df_inter["有干预样本数"] - df_inter["不应干预样本数"]
         
@@ -1608,6 +1630,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         v_total = df_inter["有干预样本数"].tolist()
         v_effective = df_inter["有效干预数"].tolist()
         # --- 3. 左侧：精美的圆环图 ---
+        business_colors = ['#1f77b4', '#4e79a7', '#76b7b2', '#54a24b', '#e15759', '#f28e2b', '#bab0ac', '#86bcb6', '#dbedff']
         fig.add_trace(go.Pie(
             labels=labels,
             values=v_total,
@@ -1616,9 +1639,15 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             textposition='outside',
             automargin=True,
             showlegend=False, 
-            marker=dict(line=dict(color='#FFFFFF', width=2)),
-            name="市场占比"
+            marker=dict(
+                colors=business_colors, 
+                line=dict(color='#FFFFFF', width=2),
+            ),
+            # marker=dict(line=dict(color='#FFFFFF', width=2)),
+            name="市场占比",
+            opacity=0.7,
         ), row=1, col=1)
+
         # --- 4. 右侧：簇状柱状图 ---
         # 柱子1：有干预样本数（背景色调）
         fig.add_trace(go.Bar(
@@ -1846,7 +1875,12 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
     
     df_cat["偏差情况"] = df_cat.apply(get_color, axis=1)
     with scatter_cat:
-        st.markdown("#### 干预下钻-品类 健康度象限 (偏差 vs 环比)")
+        st.markdown(
+            f"""
+            #### 干预情况下钻-<span style='color: #ff4b4b;'>{st.session_state.ganyu_filter_market}</span> 品类健康度象限 (偏差 vs 环比)
+            """, 
+            unsafe_allow_html=True
+        )
         fig_cat = px.scatter(
             df_cat,
             x="单周干预偏差率",
@@ -1920,7 +1954,12 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
     df_cat['单周干预偏差率'] = round(df_cat['单周干预偏差率']*100, 1)
     df_cat['环比干预偏差率'] = round(df_cat['环比干预偏差率']*100, 1)
     with detail_cat:
-        st.markdown("#### 干预下钻-品类 明细表")
+        st.markdown(
+            f"""
+            #### 干预情况下钻-<span style='color: #ff4b4b;'>{st.session_state.ganyu_filter_market}</span> 品类明细表
+            """, 
+            unsafe_allow_html=True
+        )
         def color_deviation(val):
             color = '#cf1322' if abs(val) > 0.3 else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > 0.3 else f'color: {color}'
@@ -1950,10 +1989,13 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             "品类": st.column_config.TextColumn("品类", width=50),
         },
          width="stretch", height=400, hide_index=True)
-    # detail_sku = st.columns(1)
-    # with detail_sku:
-    st.markdown("#### 干预情况下钻-MRPSKU")
-    detail_sku_ganyu, detail_sku = st.columns([2.5,3])
+    st.markdown(
+            f"""
+            #### 干预情况下钻-<span style='color: #ff4b4b;'>{st.session_state.ganyu_filter_market}_{st.session_state.ganyu_filter_category}</span> MRPSKU明细表
+            """, 
+            unsafe_allow_html=True
+        )
+    detail_sku_ganyu, detail_sku = st.columns([3,2])
     with detail_sku_ganyu:
         inter_list = ["全部"] + sorted(df["是否应该干预"].unique().tolist())
         selected_inter = st.selectbox("是否应该干预", inter_list,key="selectbox_inter")
