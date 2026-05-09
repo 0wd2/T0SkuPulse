@@ -1402,7 +1402,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             color = '#cf1322' if abs(val) > 0.3 else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > 0.3 else f'color: {color}'
 
-        styled_df = df_cat[['品类', '单周预测偏差率', '环比预测偏差率', 'SKU个数', '偏差情况']].sort_values("单周预测偏差率", ascending=False).style.applymap(
+        styled_df = df_cat[['品类', '单周预测偏差率', '环比预测偏差率', 'SKU个数', '偏差情况']].sort_values("单周预测偏差率", ascending=False).style.map(
             color_deviation, subset=['单周预测偏差率', '环比预测偏差率']
         )
         st.dataframe(styled_df,
@@ -1440,7 +1440,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             color = '#cf1322' if abs(val) > 0.27 else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > 0.27 else f'color: {color}'
 
-        styled_df = df_detail[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值","上周预测值" ,"单周预测偏差率", "环比预测偏差率"]].sort_values("单周预测偏差率", ascending=False).style.applymap(
+        styled_df = df_detail[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值","上周预测值" ,"单周预测偏差率", "环比预测偏差率"]].sort_values("单周预测偏差率", ascending=False).style.map(
             color_deviation, subset=['单周预测偏差率', '环比预测偏差率']
         )
         st.dataframe(
@@ -1690,7 +1690,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         fig.update_yaxes(title_text="样本数量", row=1, col=2)
         fig.update_xaxes(tickangle=0, row=1, col=2)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # df_m = df_filtered.groupby("子市场")[stage_cols].mean().reset_index()
     # df_m=df_m[df_m["单周干预偏差率"].notnull()]
@@ -1925,7 +1925,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             color = '#cf1322' if abs(val) > 0.3 else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > 0.3 else f'color: {color}'
 
-        styled_df = df_cat[['品类', '单周干预偏差率', '环比干预偏差率', 'SKU个数', '偏差情况']].sort_values("单周干预偏差率", ascending=False).style.applymap(
+        styled_df = df_cat[['品类', '单周干预偏差率', '环比干预偏差率', 'SKU个数', '偏差情况']].sort_values("单周干预偏差率", ascending=False).style.map(
             color_deviation, subset=['单周干预偏差率', '环比干预偏差率']
         )
 
@@ -1966,7 +1966,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             color = '#cf1322' if abs(val) > 0.30 else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > 0.30 else f'color: {color}'
 
-        styled_df = df_detail[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周干预值", "单周干预偏差率", "环比干预偏差率", "是否应该干预"]].sort_values("单周干预偏差率", ascending=False).style.applymap(
+        styled_df = df_detail[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周干预值", "单周干预偏差率", "环比干预偏差率", "是否应该干预"]].sort_values("单周干预偏差率", ascending=False).style.map(
             color_deviation, subset=['单周干预偏差率', '环比干预偏差率']
         )
         st.dataframe(
