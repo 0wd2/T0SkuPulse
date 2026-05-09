@@ -4,3 +4,4 @@ polars
 pandas
 openpyxl
 numpy
+fastexcel
