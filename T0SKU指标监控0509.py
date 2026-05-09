@@ -1656,10 +1656,10 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
                 x=[row["子市场"]],
                 y=[top_y1],
                 mode="markers+text",
-                marker=dict(color="white", size=10, line=dict(color="#52c41a", width=2)),
+                marker=dict(color="white", size=10, line=dict(color="#ff4d4f", width=2)),
                 text=[f"{row['有干预样本数'] - row['有效干预数']:.0f}"],
                 textposition="top center",
-                textfont=dict(color="#52c41a", size=14, family="Arial Black"),
+                textfont=dict(color="#ff4d4f", size=14, family="Arial Black"),
                 showlegend=i == 0,
                 hoverinfo='skip',
                 name='无效干预样本数'
@@ -1701,7 +1701,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         "主料mrpsku": "count"
     }).reset_index()
     df_m = df_m.rename(columns={"主料mrpsku": "SKU数量"})
-    df_m = df_m.sort_values(by="SKU数量", ascending=False)
+    df_m = df_m.sort_values(by="SKU数量", ascending=True)
     with col_right:
         TARGET_MIN = -0.30
         TARGET_MAX = 0.30
@@ -2014,7 +2014,7 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
         "主料mrpsku": "count"
     }).reset_index()
     df_avg = df_avg.rename(columns={"主料mrpsku": "SKU数量"})
-    df_avg = df_avg.sort_values(by="SKU数量", ascending=False)
+    df_avg = df_avg.sort_values(by="SKU数量", ascending=True)
     # 计算全市场平均值
     df_avg_allmarket = df[stage_cols].mean().reset_index()
     df_avg_allmarket[0] = df_avg_allmarket[0].astype(float)
