@@ -350,7 +350,7 @@ with fixed_container:
                 }}
                 </style>
                 """, unsafe_allow_html=True)
-            c1.metric("海外在库周转",历史海外在库周转,"目标: 第一阶段：45天\n 第二阶段：30天",delta_color="green",help="(期初在库x单价+期末在库x单价)/2/(周销x单价/7)")
+            c1.metric("海外在库周转",历史海外在库周转,"目标: 第一阶段：45天",delta_color="green",help="(期初在库x单价+期末在库x单价)/2/(周销x单价/7)")
             c2.metric("海外在途周转",历史海外在途周转,"目标: 60天",delta_color="green",help="(期初在途x单价+期末在途x单价)/2/(周销x单价/7)")
             c3.metric("国内在库周转", f"{历史国内在库周转:.1f}", delta=f"目标: 60天", delta_color="green",help="(国内期初在库x单价+国内期末在库x单价)/2/(周销x单价/7)")
             c4.metric("预测偏差率", f"{curr_avg_yuce:.1%}",delta="目标: 27%",delta_color="green")
