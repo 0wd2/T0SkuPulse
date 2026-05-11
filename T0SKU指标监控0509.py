@@ -1449,7 +1449,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             """, 
             unsafe_allow_html=True
         )
-        df_detail = df_filtered[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值","上周预测值" ,"单周预测偏差率", "环比预测偏差率"]].copy()
+        df_detail = df_filtered[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值" ,"单周预测偏差率", "环比预测偏差率"]].copy()
         df_detail=df_detail.sort_values("单周预测偏差率", ascending=False)
         df_detail['单周预测偏差率'] = round(df_detail['单周预测偏差率']*100, 1)
         df_detail['环比预测偏差率'] = round(df_detail['环比预测偏差率']*100, 1)
@@ -1457,7 +1457,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             color = '#cf1322' if abs(val) > 0.27 else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > 0.27 else f'color: {color}'
 
-        styled_df = df_detail[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值","上周预测值" ,"单周预测偏差率", "环比预测偏差率"]].sort_values("单周预测偏差率", ascending=False).style.map(
+        styled_df = df_detail[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值" ,"单周预测偏差率", "环比预测偏差率"]].sort_values("单周预测偏差率", ascending=False).style.map(
             color_deviation, subset=['单周预测偏差率', '环比预测偏差率']
         )
         st.dataframe(
@@ -1469,7 +1469,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
                 "主料mrpsku": st.column_config.TextColumn("MRPSKU", width=30),
                 "当周实际值": st.column_config.NumberColumn("实际周销", format="%d", width=20, alignment="center"),
                 "当周预测值": st.column_config.NumberColumn("预测周销", format="%d", width=20, alignment="center"),
-                "上周预测值": st.column_config.NumberColumn("上周预测周销", format="%d", width=20, alignment="center"),
+                # "上周预测值": st.column_config.NumberColumn("上周预测周销", format="%d", width=20, alignment="center"),
                 "单周预测偏差率": st.column_config.NumberColumn(
                     "单周预测偏差率(目标值:±27%)",
                     format="%.1f%%", width=50, alignment="center" 
