@@ -353,7 +353,7 @@ with fixed_container:
             c2.metric("海外在途周转",历史海外在途周转,"目标: 60天",delta_color="green",help="(期初在途x单价+期末在途x单价)/2/(周销x单价/7)")
             c3.metric("国内在库周转", f"{历史国内在库周转:.1f}", delta=f"目标: 60天", delta_color="green",help="(国内期初在库x单价+国内期末在库x单价)/2/(周销x单价/7)")
             c4.metric("预测偏差率", f"{curr_avg_yuce:.1%}",delta="目标: 27%",delta_color="green")
-            c5.metric("预测偏差率(环比)", f"{curr_avg_huanbiyuce:.0%}",delta="目标: 3%",delta_color="green")
+            c5.metric("预测偏差率(环比)", f"{curr_avg_huanbiyuce:.0%}",delta="目标: 30%",delta_color="green")
             c6.metric("干预SKU占比", f"{ganyu_intervention_rate:.0%}",delta="目标: 15%",delta_color="green")
             c7.metric("干预偏差率", f"{curr_avg_ganyu:.0%}",delta="目标: 30%",delta_color="green")
             c8.metric("干预偏差率(环比)", f"{curr_avg_huanbiganyu:.0%}",delta="目标: 5%",delta_color="green")    
