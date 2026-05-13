@@ -352,8 +352,8 @@ with fixed_container:
             c1.metric("海外在库周转",历史海外在库周转,"目标: P1:45天,P2:30天",delta_color="green",help="(期初在库x单价+期末在库x单价)/2/(周销x单价/7)")
             c2.metric("海外在途周转",历史海外在途周转,"目标: 60天",delta_color="green",help="(期初在途x单价+期末在途x单价)/2/(周销x单价/7)")
             c3.metric("国内在库周转", f"{历史国内在库周转:.1f}", delta=f"目标: 60天", delta_color="green",help="(国内期初在库x单价+国内期末在库x单价)/2/(周销x单价/7)")
-            c4.metric("预测偏差率", f"{curr_avg_yuce:.1%}",delta="目标: 27%",delta_color="green")
-            c5.metric("预测偏差率(环比)", f"{curr_avg_huanbiyuce:.0%}",delta="目标: 30%",delta_color="green")
+            c4.metric("预测偏差率", f"{curr_avg_yuce:.1%}",delta="目标: 35%",delta_color="green")
+            c5.metric("预测偏差率(环比)", f"{curr_avg_huanbiyuce:.0%}",delta="目标: 5%",delta_color="green")
             c6.metric("干预SKU占比", f"{ganyu_intervention_rate:.0%}",delta="目标: 15%",delta_color="green")
             c7.metric("干预偏差率", f"{curr_avg_ganyu:.0%}",delta="目标: 30%",delta_color="green")
             c8.metric("干预偏差率(环比)", f"{curr_avg_huanbiganyu:.0%}",delta="目标: 5%",delta_color="green")    
@@ -906,19 +906,44 @@ def inventorySales_rate_area(df_stock_turnover, curr_filters):
     last_dt_history = st.session_state.t0_date.strftime("%Yw%V")
     
     # 未来库存与周转
-    df_temp_future = df[(df['周数']>last_dt_history)].copy()
+    
+    market_filter, category_filter, sku_filter = st.columns(3)
+    with market_filter:
+        market_list_stock = ["全部市场"] + sorted(df["子市场"].unique().tolist())
+        selected_market = st.selectbox("选择要查看的子市场", market_list_stock,key="selectbox_market_stock")
+        st.session_state.stock_filter_market=selected_market
+    with category_filter:
+        category_list_stock = ["全部品类"] + sorted(df["品类"].unique().tolist())
+        selected_category = st.selectbox("选择要查看的品类", category_list_stock,key="selectbox_category_stock")
+        st.session_state.stock_filter_category=selected_category
+    with sku_filter:
+        sku_list_stock = ["全部SKU"] + sorted(df["主料mrpsku"].unique().tolist())
+        selected_sku = st.selectbox("选择要查看的SKU", sku_list_stock,key="selectbox_sku_stock")
+        st.session_state.stock_filter_sku=selected_sku
+    if selected_market == "全部市场":
+        df_filtered = df
+    elif selected_market != "全部市场" and selected_category == "全部品类":
+        df_filtered = df[(df["子市场"] == selected_market)]
+    elif selected_market != "全部市场" and selected_category != "全部品类":
+        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category)]
+    elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
+        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category) & (df["主料mrpsku"] == selected_sku)]
+
+    df_temp_future = df_filtered[(df_filtered['周数']>last_dt_history)].copy()
     df_temp_future['期初在库金额'] = df_temp_future['当周期初在库']*df_temp_future['单价']
     df_temp_future['期末在库金额'] = df_temp_future['下周期初在库']*df_temp_future['单价']
     df_temp_future['期初在途金额'] = df_temp_future['当周期初在途']*df_temp_future['单价']
     df_temp_future['期末在途金额'] = df_temp_future['下周期初在途']*df_temp_future['单价']
     df_temp_future['当周周销金额'] = df_temp_future['当周周销']*df_temp_future['单价']
-    df_temp_future = df_temp_future.groupby(['周数'])[['当周期初在库','下周期初在库','当周期初在途',"下周期初在途","SLT平均周销","单价","期初在库金额","期末在库金额","期初在途金额","期末在途金额","当周到货","目标平均周销","SLT+1周期初在库","SLT+1周期初在途","当周周销金额"]].sum().reset_index().sort_values('周数')
-    df_temp_future['未来海外在库周转'] = (((df_temp_future['期初在库金额'] + df_temp_future['期末在库金额'])/2) / (df_temp_future['当周周销金额'] / 7)).round(1)
-    df_temp_future['未来海外在途周转'] = (((df_temp_future['期初在途金额'] + df_temp_future['期末在途金额'])/2) / (df_temp_future['当周周销金额'] / 7)).round(1)
-    df_temp_future['DOS1'] = ((df_temp_future['当周期初在库'] / df_temp_future['目标平均周销']) * 7).round(1)
-    df_temp_future['DOS2'] = ((df_temp_future['当周期初在库'] + df_temp_future['当周到货']) / df_temp_future['目标平均周销'] * 7).round(1)
+    df_temp_future_group = df_temp_future.groupby(['周数'])[['当周期初在库','下周期初在库','当周期初在途',"下周期初在途","SLT平均周销","单价","期初在库金额","期末在库金额","期初在途金额","期末在途金额","当周到货","目标平均周销","SLT+1周期初在库","SLT+1周期初在途","当周周销金额","当周周销"]].sum().reset_index().sort_values('周数')
+    df_temp_future_group['未来海外在库周转'] = (((df_temp_future_group['期初在库金额'] + df_temp_future_group['期末在库金额'])/2) / (df_temp_future_group['当周周销金额'] / 7)).round(1)
+    df_temp_future_group['未来海外在途周转'] = (((df_temp_future_group['期初在途金额'] + df_temp_future_group['期末在途金额'])/2) / (df_temp_future_group['当周周销金额'] / 7)).round(1)
+    df_temp_future_group['DOS1'] = ((df_temp_future_group['当周期初在库'] / df_temp_future_group['目标平均周销']) * 7).round(1)
+    df_temp_future_group['DOS2'] = ((df_temp_future_group['当周期初在库'] + df_temp_future_group['当周到货']) / df_temp_future_group['目标平均周销'] * 7).round(1)
+    df_temp_future_group['库销比天数'] = ((df_temp_future_group['当周期初在库'] / df_temp_future_group['当周周销']) * 7).round(1)
+
     st.markdown("### 看未来")
-    df_temp_future=df_temp_future[(df_temp_future['周数']<='2026w53')]
+    df_temp_future_group=df_temp_future_group[(df_temp_future_group['周数']<='2026w53')]
     fig = make_subplots(
             rows=1, cols=2, 
             shared_yaxes=False,    
@@ -927,9 +952,9 @@ def inventorySales_rate_area(df_stock_turnover, curr_filters):
         )
 
     metrics = ['未来海外在库周转', '未来海外在途周转']
-    colors = ['#1f77b4', '#ff7f0e'] 
-    
-    week_values = df_temp_future["周数"].values
+    colors = ['#1f77b4', '#ff7f0e']
+
+    week_values = df_temp_future_group["周数"].values
     week_label = [str(x)[2:] for x in week_values]
 
     # 2. 循环添加曲线 (row 固定为 1，col 随循环变化)
@@ -938,7 +963,7 @@ def inventorySales_rate_area(df_stock_turnover, curr_filters):
         fig.add_trace(
             go.Scatter(
                 x=week_values, 
-                y=df_temp_future[col_name],
+                y=df_temp_future_group[col_name],
                 name=col_name,
                 mode='lines+markers',
                 line=dict(color=colors[i], width=2),
@@ -951,7 +976,8 @@ def inventorySales_rate_area(df_stock_turnover, curr_filters):
     for i, annotation in enumerate(fig['layout']['annotations']):
         annotation['font'] = dict(family="Microsoft YaHei", size=20, color="black")
     
-    fig.add_hline(y=45,line_dash="dash",line_color="#1f77b4", line_width=2,row=1, col=1,annotation_text="目标：45天",annotation_position="bottom right")
+    fig.add_hline(y=45,line_dash="dash",line_color="#1f77b4", line_width=2,row=1, col=1,annotation_text="P1目标：45天",annotation_position="bottom right")
+    fig.add_hline(y=30,line_dash="dash",line_color="#1f77b4", line_width=2,row=1, col=1,annotation_text="P2目标：30天",annotation_position="bottom right")
     fig.add_hline(y=60,line_dash="dash",line_color="#ff7f0e", line_width=2,row=1, col=2,annotation_text="目标：60天",annotation_position="bottom right")
     # 3. 布局优化
     fig.update_layout(
@@ -976,76 +1002,73 @@ def inventorySales_rate_area(df_stock_turnover, curr_filters):
     fig.update_yaxes(
         showgrid=True, 
         gridcolor='whitesmoke',
-        zeroline=True,
-        zerolinecolor='lightgray'
+        # zeroline=True,
+        # zerolinecolor='lightgray',
+        # 设定范围为[0,100]
+        range=[0, 100]
     )
 
     # 6. 在 Streamlit 中显示
     st.plotly_chart(fig, width='stretch')
+    st.markdown("### 未来库存、销量与到货")
 
-    st.markdown("### 未来库存、到货与DOS")
     fig = go.Figure()
-    df_temp_future=df_temp_future[(df_temp_future['周数']<='2026w53')]
+    df_temp_future_group=df_temp_future_group[(df_temp_future_group['周数']<='2026w53')]
 
-    color_stock = "#ff9d4f"
-    color_replenish = "#5da9c4"
+    color_stock = "#1f77b4"
+    color_replenish = "#ff7f0e"
+    color_sales = "#009966"
     fig.add_trace(go.Scatter(
-        x=df_temp_future["周数"], 
-        y=df_temp_future["当周期初在库"],
+        x=df_temp_future_group["周数"], 
+        y=df_temp_future_group["当周期初在库"],
         mode='lines+text+markers',
         name='库存数量',
         line=dict(color=color_stock, width=3, shape='spline'),
-        text=[f"{row:,.0f}" for row in df_temp_future['当周期初在库']],
+        text=[f"{row:,.0f}" for row in df_temp_future_group['当周期初在库']],
         textposition="bottom center",
         textfont=dict(color=color_stock)
     ))
 
     fig.add_trace(go.Scatter(
-        x=df_temp_future["周数"], 
-        y=df_temp_future["当周到货"],
+        x=df_temp_future_group["周数"], 
+        y=df_temp_future_group["当周到货"],
         mode='lines+text+markers',
         name='到货数量',
         line=dict(color=color_replenish, width=3, shape='spline'),
-        text=[f"{row:,.0f}" for row in df_temp_future['当周到货']],
+        text=[f"{row:,.0f}" for row in df_temp_future_group['当周到货']],
         textposition="top center",
         textfont=dict(color=color_replenish)
     ))
-    
-    top_y1 = max(df_temp_future["当周期初在库"].max(), df_temp_future["当周到货"].max()) * 1.4
-    top_y2 = max(df_temp_future["当周期初在库"].max(), df_temp_future["当周到货"].max()) * 1.6
-    for i, row in df_temp_future.iterrows():
-
-        start_y = max(row["当周期初在库"], df_temp_future.iloc[i]["当周到货"])  
+    fig.add_trace(go.Scatter(
+        x=df_temp_future_group["周数"], 
+        y=df_temp_future_group["当周周销"],
+        mode='lines+text+markers',
+        name='周销数量',
+        line=dict(color=color_sales, width=3, shape='spline'),
+        text=[f"{row:,.0f}" for row in df_temp_future_group['当周周销']],
+        textposition="bottom center",
+        textfont=dict(color=color_sales)
+    ))
+    top_y1 = max(df_temp_future_group["当周期初在库"].max(), df_temp_future_group["当周周销"].max()) * 1.4
+    for i, row in df_temp_future_group.iterrows():
+        start_y = max(row["当周期初在库"], row["当周周销"])  
         fig.add_shape(
             type="line",
             x0=row["周数"], y0=start_y + 10,
             x1=row["周数"], y1=top_y1 - 20,
             line=dict(color="gray", width=1, dash="dot"),
         )
-        
         fig.add_trace(go.Scatter(
             x=[row["周数"]],
             y=[top_y1],
             mode="markers+text",
             marker=dict(color="white", size=10, line=dict(color="#52c41a", width=2)),
-            text=[f"{row['DOS1']:.1f}"],
+            text=[f"{row['库销比天数']:.0f}"],
             textposition="top center",
             textfont=dict(color="#52c41a", size=14, family="Arial Black"),
             showlegend=i == 0,
             hoverinfo='skip',
-            name='DOS(在库)'
-        ))
-        fig.add_trace(go.Scatter(
-            x=[row["周数"]],
-            y=[top_y2],
-            mode="markers+text",
-            marker=dict(color="white", size=10, line=dict(color="#ff4d4f", width=2)),
-            text=[f"{row['DOS2']:.1f}"],
-            textposition="top center",
-            textfont=dict(color="#ff4d4f", size=14, family="Arial Black"),
-            showlegend=i == 0,
-            hoverinfo='skip',
-            name='DOS(在库+到货)'
+            name='库销比天数'
         ))
     new_labels = [str(x)[2:] for x in df_temp_future["周数"].values]
     fig.update_layout(
@@ -1070,62 +1093,189 @@ def inventorySales_rate_area(df_stock_turnover, curr_filters):
     )
     st.plotly_chart(fig, width='stretch')
 
-    # st.markdown("### 库存与补货关系")
-    # slider1,slider2=st.columns([1,4])
-    # st.markdown("""
-    #     <style>
-    #     /* 1. 修改滑块上方的标题字体大小 (Label) */
-    #     [data-testid="stWidgetLabel"] p {
-    #         font-size: 24px !important;
-    #         font-weight: bold !important;
-    #         color: #31333F !important;
-    #     }
+    stock_col1,stock_col2 = st.columns([1,2])
+    df_future_single = df_filtered[(df_filtered['周数']>last_dt_history)].copy()
+    df_future_single['期初在库金额'] = df_future_single['当周期初在库']*df_future_single['单价']
+    df_future_single['期末在库金额'] = df_future_single['下周期初在库']*df_future_single['单价']
+    df_future_single['期初在途金额'] = df_future_single['当周期初在途']*df_future_single['单价']
+    df_future_single['期末在途金额'] = df_future_single['下周期初在途']*df_future_single['单价']
+    df_future_single['当周周销金额'] = df_future_single['当周周销']*df_future_single['单价']
+    df_future_single['未来海外在库周转'] = (((df_future_single['期初在库金额'] + df_future_single['期末在库金额'])/2) / (df_future_single['当周周销金额'] / 7)).round(1)
+    df_future_single['未来海外在途周转'] = (((df_future_single['期初在途金额'] + df_future_single['期末在途金额'])/2) / (df_future_single['当周周销金额'] / 7)).round(1)
+    # df_future_single_oneweek = df_future_single[df_future_single['周数']==min(df_future_single['周数'])]
+    df_future_single_oneweek=df_future_single.groupby(['子市场','品类','主料mrpsku'])[['未来海外在库周转','未来海外在途周转']].mean().reset_index()
+    周转SKU总数 = len(df_future_single_oneweek)
+    df_future_single_oneweek['未来海外在库周转区间'] = pd.cut(
+        df_future_single_oneweek['未来海外在库周转'], 
+        bins=[0, 15, 30, 45, float('inf')], 
+        labels=['[0,15]', '[15,30]', '[30,45]', '[45,+inf]']
+    )
+    df_future_single_oneweek['未来海外在途周转区间'] = pd.cut(
+        df_future_single_oneweek['未来海外在途周转'], 
+        bins=[0, 30,45, 60, float('inf')], 
+        labels=['[0,30]','[30,45]', '[45,60]', '[60,+inf]']
+    )
+    df_future_single_oneweek['下一步动作']="调整"
+    with stock_col1:
+        st.markdown("### 海外在库在途周转区间明细")
+        # stock_counts = df_future_single_oneweek['未来海外在库周转区间'].value_counts()
+        # transit_counts = df_future_single_oneweek['未来海外在途周转区间'].value_counts()
 
-    #     /* 2. 修改滑块当前数值的字体大小 (Value) */
-    #     [data-testid="stSlider"] span {
-    #         font-size: 20px !important;
-    #     }
 
-    #     /* 3. 修改滑块轨道（轴）的粗细 */
-    #     div[data-baseweb="slider"] > div:first-child {
-    #         height: 16px !important; /* 这里控制轴的粗细 */
-    #         border-radius: 6px !important;
-    #     }
+        # # 提取数值
+        # stock_0_45 = stock_counts.get('达标', 0)
+        # stock_45_rate = stock_0_45 / 周转SKU总数
+        # stock_45_plus = stock_counts.get('不达标', 0)
+        # stock_45_rate_plus = stock_45_plus / 周转SKU总数
 
-    #     /* 4. 修改滑块圆点（Thumb）的大小，使其与粗轴匹配 */
-    #     div[data-baseweb="slider"] div[role="slider"] {
-    #         height: 24px !important;
-    #         width: 24px !important;
-    #         background-color: #46ACC8 !important; /* 也可以顺便改个颜色 */
-    #     }
+        # transit_0_60 = transit_counts.get('达标', 0)
+        # transit_60_rate = transit_0_60 / 周转SKU总数
+        # transit_60_plus = transit_counts.get('不达标', 0)
+        # transit_60_rate_plus = transit_60_plus / 周转SKU总数
 
-    #     /* 5. 修改下方刻度值字体大小 (Min/Max) */
-    #     div[data-testid="stTickBarMin"], div[data-testid="stTickBarMax"] {
-    #         font-size: 25px !important;
-    #     }
-    #     </style>
-    #     """, unsafe_allow_html=True)
+        # # 2. 构建图形
+        # fig_turnover = go.Figure()
+        # fig_turnover.add_trace(go.Bar(
+        #     name='SKU总数',
+        #     x=['SKU总数'],
+        #     y=[周转SKU总数],
+        #     text=[周转SKU总数],
+        #     textposition='outside',
+        #     marker_color="#A6ACAF",
+        #     textfont=dict(size=14,family="Microsoft YaHei")
+        # ))
+        # # 同时显示个数和比例
+        # fig_turnover.add_trace(go.Bar(
+        #     name='达标区间',
+        #     x=['在库周转', '在途周转'],
+        #     y=[stock_0_45, transit_0_60],
+        #     # text=[stock_0_45, transit_0_60],
+        #     text=[f"{stock_0_45}, {stock_45_rate:.0%}", f"{transit_0_60}, {transit_60_rate:.0%}"],
+        #     textposition='inside',
+        #     marker_color='#5da9c4',
+        #     textfont=dict(size=14,family="Microsoft YaHei")
+        # ))
+        # fig_turnover.add_trace(go.Bar(
+        #     name='不达标区间',
+        #     x=['在库周转', '在途周转'],
+        #     y=[stock_45_plus, transit_60_plus],
+        #     # text=[stock_45_plus, transit_60_plus],
+        #     text=[f"{stock_45_plus}, {stock_45_rate_plus:.0%}", f"{transit_60_plus}, {transit_60_rate_plus:.0%}"],
+        #     textposition='outside',
+        #     marker_color='#ff9d4f',
+        #     textfont=dict(size=14,family="Microsoft YaHei")
+        # ))
+        # def add_proportion_annotation(fig, x_pos, y_val, text, ay):
+        #     fig.add_annotation(
+        #         x=x_pos, y=y_val,
+        #         text=text,
+        #         showarrow=True,
+        #         arrowhead=0,     # 0表示直线，没有箭头尖
+        #         arrowwidth=1,
+        #         arrowcolor="#666",
+        #         ax=-60,          # 线条向左延伸40个单位
+        #         ay=ay,           # 垂直偏移
+        #         font=dict(size=10, color="#666"),
+        #         xanchor="right"  # 文字在短线左侧
+        #     )
 
-    
-    # with slider1:
-    #     发货频次 = st.slider(
-    #         "发货频次",
-    #         min_value=1,
-    #         max_value=4,
-    #         value=1,
-    #         step=1
-    #     )
-    #     发货目标周数 = st.slider(
-    #         "发货目标周数",
-    #         min_value=1,
-    #         max_value=12,
-    #         value=4,
-    #         step=1
-    #     )
-    #     st.session_state.fahuo_frequency = 发货频次
-    #     st.session_state.target_week = 发货目标周数
+        # # 为“在库周转”添加比例标注
+        # # 标注不达标比例（指向红段中间）
+        # add_proportion_annotation(fig_turnover, '在库周转',周转SKU总数/2 - (stock_45_plus/2), f"{stock_45_plus/周转SKU总数*100:.1f}%", 0)
+        # # 标注达标比例（指向绿段中间）
+        # add_proportion_annotation(fig_turnover, '在库周转', stock_0_45/2, f"{stock_0_45/周转SKU总数*100:.1f}%", 0)
 
-    
+        # 为“在途周转”添加比例标注
+        # add_proportion_annotation(fig_turnover, '在途周转',周转SKU总数/2 - (transit_60_plus/2), f"{transit_60_plus/周转SKU总数*100:.1f}%", 0)
+        # add_proportion_annotation(fig_turnover, '在途周转', transit_0_60/2, f"{transit_0_60/周转SKU总数*100:.1f}%", 0)
+
+        # 3. 设置为堆积模式并添加总数标注（可选）
+        # fig_turnover.update_layout(
+        #     barmode='stack',  # 关键：设置为堆积模式
+        #     margin=dict(l=10, r=10, t=30, b=10),
+        #     xaxis_title="周转类型",
+        #     yaxis_title="SKU数量",
+        #     legend_title="统计区间",
+        #     hovermode='x unified',
+        #     bargap=0.3, # 取值 0-1，越小柱子越宽
+        #     legend=dict(
+        #         orientation="h",   # 将图例改为水平显示
+        #         yanchor="bottom",
+        #         y=1.02,           # 把图例放到图表上方，腾出左右空间
+        #         xanchor="right",
+        #         x=1
+        #     ),
+        #     font=dict(size=16,family="Microsoft YaHei"),
+        # )
+        stock_counts = df_future_single_oneweek['未来海外在库周转区间'].value_counts().sort_index().reset_index()
+        stock_counts.columns = ['区间', '数量']
+        stock_counts['维度'] = '未来海外在库'  # 标记为在库维度
+
+        transit_counts = df_future_single_oneweek['未来海外在途周转区间'].value_counts().sort_index().reset_index()
+        transit_counts.columns = ['区间', '数量']
+        transit_counts['维度'] = '未来海外在途' 
+        plot_df = pd.concat([stock_counts, transit_counts]).dropna(subset=['区间'])
+        color_map = {
+            '[0,15]': '#a569bd', '[15,30]': '#5dade2', '[30,45]': '#58D68D', '[45,+inf]': '#e74c3c',
+            '[0,30]': '#a569bd', '[45,60]': '#58D68D', '[60,+inf]': '#e74c3c'
+        }
+        # 将颜色映射到 DataFrame 中
+        plot_df['颜色'] = plot_df['区间'].map(color_map)
+        fig_turnover=go.Figure()
+        fig_turnover.add_trace(go.Bar(
+            name='SKU总数',
+            x=['SKU总数'],
+            y=[周转SKU总数],
+            text=[周转SKU总数],
+            textposition='outside',
+            marker_color="#A6ACAF",
+            textfont=dict(size=14,family="Microsoft YaHei", color="black")
+        ))
+        color_map = {
+            '[0,15]': '#a569bd', '[15,30]': '#5dade2', '[30,45]': '#58D68D', '[45,+inf]': '#e74c3c',
+            '[0,30]': '#a569bd', '[45,60]': '#58D68D', '[60,+inf]': '#e74c3c'
+        }
+        for interval in plot_df['区间'].unique():
+            interval_data = plot_df[plot_df['区间'] == interval]
+            fig_turnover.add_trace(go.Bar(
+                x=interval_data['维度'],       # X轴：在库、在途
+                y=interval_data['数量'],       # Y轴：对应的数量
+                name=interval,                 # 命名：当前区间名（图例会显示这个）
+                text=interval_data['数量'],    # 显示数量文字
+                textposition='auto',         # 堆积图建议文字放内部
+                marker_color=color_map.get(interval, '#999999'), # 获取当前区间的专属颜色
+                textfont=dict(size=14, family="Microsoft YaHei", color="black"),
+        ))
+
+        fig_turnover.update_layout(
+            barmode='stack',
+            # title="未来海外周转区间分布",
+            xaxis_title="",
+            yaxis_title="SKU数量",
+            legend_title="周转区间",
+            height=500
+        )
+        
+        st.plotly_chart(fig_turnover, width='stretch',height=500)
+    with stock_col2:
+        st.markdown("### 海外在库在途周转SKU明细")
+        st.dataframe(
+            df_future_single_oneweek,
+            column_config={
+                "子市场": st.column_config.TextColumn("子市场", width=20),
+                "品类": st.column_config.TextColumn("品类", width=20),
+                "主料mrpsku": st.column_config.TextColumn("MRPSKU", width=30),
+                "未来海外在库周转": st.column_config.NumberColumn("海外在库周转(目标:45天)", format="%d", width=20, alignment="center"),
+                "未来海外在途周转": st.column_config.NumberColumn("海外在途周转(目标:60天)", format="%d", width=20, alignment="center"),
+                "未来海外在库周转区间": st.column_config.TextColumn("海外在库周转区间", width=20),
+                "未来海外在途周转区间": st.column_config.TextColumn("海外在途周转区间", width=20)
+            },
+            hide_index=True,
+            width="stretch",
+            height=500
+        )
+
+  
 # 预测指标区域
 def predictSales_rate_area(df_yuce, curr_filters):
     df = apply_filters(df_yuce, curr_filters)
@@ -1135,18 +1285,8 @@ def predictSales_rate_area(df_yuce, curr_filters):
 
     # st.subheader("📊 预测准确度监控看板")
     # --- 1. 顶部 KPI 总览 ---
-    avg_bias = df["单周预测偏差率"].abs().mean()
-    avg_bias_ratio = df["环比预测偏差率"].abs().mean()
-    m_col1, m_col2, m_col3, m_col4 = st.columns([1,1,1,1])
-    m_col1.metric("预测偏差率", f"{avg_bias:.0%}", delta="目标:27%")
-    m_col2.metric("预测偏差率(环比)", f"{avg_bias_ratio:.0%}", delta="目标:30%")
-    oversku_num = len(df[(df["单周预测偏差率"] > 0.27) | (df["单周预测偏差率"] < -0.27)])
     
-    m_col3.metric("预测偏差过大SKU", oversku_num,delta=f"占比:{oversku_num / len(df):.0%}",help="预测偏差>27%的SKU数量")
-    oversku_num_ratio = len(df[(df["环比预测偏差率"] > 0.3) | (df["环比预测偏差率"] < -0.3)])
-    m_col4.metric("预测偏差过大SKU(环比)", oversku_num_ratio,delta=f"占比:{oversku_num_ratio / len(df):.0%}",help="环比预测偏差>30%的SKU数量")
-  
-    market_filter, category_filter, sku_filter = st.columns(3)
+    market_filter, category_filter, sku_filter,outStock_filter,week_filter = st.columns(5)
     with market_filter:
         market_list = ["全部市场"] + sorted(df["子市场"].unique().tolist())
         selected_market = st.selectbox("选择要查看的子市场", market_list,key="selectbox_market_yuce")
@@ -1159,6 +1299,14 @@ def predictSales_rate_area(df_yuce, curr_filters):
         SKU_list = ["全部SKU"] + sorted(df["主料mrpsku"].unique().tolist())
         selected_sku = st.selectbox("选择要查看的SKU", SKU_list,key="selectbox_sku_yuce")
         st.session_state.yuce_filter_sku=selected_sku
+    with outStock_filter:
+        outStock_status_list = ["全部状态","断货","非断货"]
+        select_stockStatus = st.selectbox("选择SKU的状态", outStock_status_list,key="selectbox_outStock_yuce")
+        st.session_state.yuce_filter_outStockStatus=select_stockStatus
+    with week_filter:
+        select_week = st.date_input("选择要查看的周数", value=default_monday,key="date_input_week_yuce")
+        select_week = select_week.strftime("%Yw%V")
+        st.session_state.yuce_filter_week=select_week
 
     if selected_market == "全部市场":
         df_filtered = df
@@ -1168,9 +1316,23 @@ def predictSales_rate_area(df_yuce, curr_filters):
         df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category)]
     elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
         df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category) & (df["主料mrpsku"] == selected_sku)]
+    if select_stockStatus == "全部状态":
+        df_filtered = df_filtered
+    elif select_stockStatus == "断货":
+        df_filtered = df_filtered[df_filtered["状态"] == "断货"]
+    elif select_stockStatus == "非断货":
+        df_filtered = df_filtered[df_filtered["状态"] != "断货"]
+
+    # df_filtered_noOutStock = df_filtered[df_filtered["状态"] != "断货"]
+    单周预测偏差 = df_filtered["单周预测偏差率"].abs().mean()
+    环比预测偏差 = df_filtered["环比预测偏差率"].abs().mean()
+    m_col1, m_col2 = st.columns(2)
+    m_col1.metric("预测偏差率", f"{单周预测偏差:.0%}", delta="目标:35%")
+    m_col2.metric("预测偏差率(环比)", f"{环比预测偏差:.0%}", delta="目标:5%")
     col_left, col_right = st.columns(2)
     stage_cols = ["单周预测偏差率", "环比预测偏差率"]
-    df_m = df_filtered.groupby("子市场").agg({
+    df_filtered[stage_cols] = df_filtered[stage_cols].abs()
+    df_m = df_filtered[df_filtered["周数"] == select_week].groupby("子市场").agg({
         "单周预测偏差率": "mean",
         "环比预测偏差率": "mean",
         "主料mrpsku": "count"
@@ -1179,9 +1341,97 @@ def predictSales_rate_area(df_yuce, curr_filters):
     df_m = df_m.sort_values(by="SKU数量", ascending=True)
 
     with col_left:
-        TARGET_MIN = -0.27
-        TARGET_MAX = 0.27
-        st.markdown("#### 各市场预测偏差全貌 (目标区间: ±27%)")
+        st.markdown("#### 历史预测偏差趋势")
+        df_filtered_week = df_filtered.groupby("周数").agg({
+            "单周预测偏差率": "mean",
+            "环比预测偏差率": "mean"
+        }).reset_index()
+        fig_历史预测曲线=go.Figure()
+        fig_历史预测曲线.add_trace(
+            go.Scatter(
+                x=df_filtered_week["周数"],
+                y=df_filtered_week["单周预测偏差率"],
+                mode='lines+markers+text',
+                line=dict(color='#1f77b4', width=2),
+                marker=dict(
+                    color="#1f77b4", 
+                    size=20, 
+                    line=dict(width=5, color='white')
+                ),
+                text=df_filtered_week["单周预测偏差率"].apply(lambda x: f"{x:.0%}"),
+                textposition="top left",
+                name="单周偏差"
+            )
+        )
+        fig_历史预测曲线.add_trace(
+            go.Scatter(
+                x=df_filtered_week["周数"],
+                y=df_filtered_week["环比预测偏差率"],
+                mode='lines+markers+text',
+                line=dict(color='#ff7f0e', width=2),
+                marker=dict(
+                    color="#ff7f0e", 
+                    size=20, 
+                    line=dict(width=5, color='white')
+                ),
+                text=df_filtered_week["环比预测偏差率"].apply(lambda x: f"{x:.0%}"),
+                textposition="bottom left",
+                name="环比偏差",
+                yaxis="y2"
+            )
+        )
+        fig_历史预测曲线.add_hline(
+            y=0.35,
+            line_dash="dash",
+            line_color="#1f77b4",  
+            annotation_text="预测偏差: 35%",
+            annotation_position="bottom right",
+            opacity=0.7
+            
+        )
+        fig_历史预测曲线.add_shape(
+            type="line",
+            xref="paper", yref="y2",  # x轴跨越整个画布，y轴绑定到右轴 y2
+            x0=0, y0=0.05,
+            x1=1, y1=0.05,
+            line=dict(color="#ff7f0e", width=2, dash="dash"),
+            opacity=0.7
+        )
+        fig_历史预测曲线.update_layout(
+            # 左侧 Y 轴配置
+            yaxis=dict(
+                title="单周预测偏差率",
+                range=[0, 1.0],  
+                tickformat=".0%", 
+                side="left"
+            ),
+            # 右侧 Y 轴配置
+            yaxis2=dict(
+                title="环比预测偏差率",
+                range=[0, 0.2],  
+                tickformat=".0%", 
+                overlaying="y",   
+                side="right"
+            ),
+            # 可选：优化整体布局，防止右侧 Y 轴标题被截断
+            margin=dict(r=80),
+            legend=dict(
+                orientation="h",          # 水平排列
+                yanchor="bottom",         # 垂直方向以底部为锚点
+                y=1.02,                   # 放在绘图区顶部稍微偏上的位置
+                xanchor="center",         # 水平方向以中心为锚点
+                x=0.5,                    # 放在水平方向 50% 的位置（居中）
+                bgcolor="rgba(255,255,255,0.8)" # 可选：设置半透明背景，防止遮挡标题或边框
+            ),
+            font=dict(family="Microsoft YaHei",size=10)
+        )
+
+        st.plotly_chart(fig_历史预测曲线,width="stretch",height=550)
+
+
+    with col_right:
+        TARGET_MAX = 0.35
+        st.markdown("#### 各市场预测偏差全貌 (目标区间:35%)")
 
         # --- 2. 创建布局 ---
         fig = make_subplots(
@@ -1190,21 +1440,8 @@ def predictSales_rate_area(df_yuce, curr_filters):
             horizontal_spacing=0.03, 
             column_widths=[0.7, 0.3]
         )
-
-        # --- 3. 【核心修改】添加左侧图表的 ±30% 目标区间阴影 ---
-        # 使用 add_vrect 添加一个淡绿色的背景带，代表“安全区”
-        fig.add_vrect(
-            x0=TARGET_MIN, x1=TARGET_MAX, 
-            fillcolor="rgba(82, 196, 26, 0.1)", # 极淡的绿色
-            line_width=0,
-            layer="below", # 放在柱子下面
-            row=1, col=1
-        )
-
-        # --- 4. 左侧：单周预测偏差率 (条形图) ---
-        # 颜色逻辑：出界的标橙色，在区间内的用青色
         colors_bar = [
-            "#ff9d4f" if (x > TARGET_MAX or x < TARGET_MIN) else "#5da9c4" 
+            "#ff9d4f" if (x > TARGET_MAX) else "#5da9c4" 
             for x in df_m["单周预测偏差率"]
         ]
 
@@ -1222,18 +1459,20 @@ def predictSales_rate_area(df_yuce, curr_filters):
             row=1, col=1
         )
 
-        for line_x in [TARGET_MIN, TARGET_MAX]:
+        for line_x in [TARGET_MAX]:
             fig.add_vline(
                 x=line_x, 
                 line_dash="dash", 
                 line_color="red", 
                 line_width=2,
-                row=1, col=1
+                row=1, col=1,
+                # 不透明度
+                opacity=0.8
             )
 
 
         # --- 5. 右侧：环比预测偏差率 (折线图) ---
-        colors_line = ["#5da9c4" if abs(x) <= 0.3 else "#f5222d" for x in df_m["环比预测偏差率"]]
+        colors_line = ["#5da9c4" if abs(x) <= 0.05 else "#f5222d" for x in df_m["环比预测偏差率"]]
 
         fig.add_trace(
             go.Scatter(
@@ -1252,19 +1491,20 @@ def predictSales_rate_area(df_yuce, curr_filters):
             ),
             row=1, col=2
         )
-        for line_x in [0.30, -0.30]:
+        for line_x in [0.05, -0.05]:
             fig.add_vline(
                 x=line_x, 
                 line_dash="dash", 
                 line_color="red", 
                 line_width=2,
-                row=1, col=2
+                row=1, col=2,
+                # 不透明度
+                opacity=0.8
             )
 
         # --- 6. 布局精修 ---
         # 处理 UK 等极端值：确保坐标轴能盖住 ±30%
         max_val = max(df_m["单周预测偏差率"].max(), 0.5)
-        min_val = min(df_m["单周预测偏差率"].min(), -0.5)
 
         fig.update_layout(
             template="simple_white",
@@ -1272,15 +1512,15 @@ def predictSales_rate_area(df_yuce, curr_filters):
             height=len(df_m) * 45 + 120,
             margin=dict(l=10, r=60, t=20, b=40),
             xaxis=dict(
-                title="单周偏差(±27%)",
+                title="单周偏差(35%)",
                 tickformat=".0%",
-                range=[min_val - 0.1, max_val + 0.3], # 留出文本空间
+                range=[0, max_val + 0.3], # 留出文本空间
                 zeroline=True, zerolinecolor="#8c8c8c"
             ),
             xaxis2=dict(
-                title="环比偏差(±30%)",
+                title="环比偏差(5%)",
                 tickformat=".0%",
-                range=[-1.1, 1.1], # 环比范围固定，方便观察斜率
+                range=[0, 0.5], # 环比范围固定，方便观察斜率
                 showgrid=False,
                 zeroline=True
             ),
@@ -1294,8 +1534,8 @@ def predictSales_rate_area(df_yuce, curr_filters):
         fig.update_yaxes(tickfont=dict(size=13), row=1, col=1)
 
         st.plotly_chart(fig, width='stretch')
-        
-    df_cat = df_filtered.groupby("品类")[stage_cols].mean().reset_index()
+            
+    df_cat = df_filtered[df_filtered["周数"] == select_week].groupby("品类")[stage_cols].mean().reset_index()
     df_cat = df_filtered.groupby("品类").agg({
         "单周预测偏差率": "mean",
         "环比预测偏差率": "mean",
@@ -1319,87 +1559,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             return "预测过低"
         return "正常"
     
-    df_cat["偏差情况"] = df_cat.apply(get_color, axis=1)
-    
-    with col_right:
-        st.markdown(
-            f"""
-            #### 预测情况下钻-<span style='color: #ff4b4b;'>{st.session_state.yuce_filter_market}</span> 品类健康度象限 (偏差 vs 环比)
-            """, 
-            unsafe_allow_html=True
-        )
-        fig_cat = px.scatter(
-            df_cat,
-            x="单周预测偏差率",
-            y="环比预测偏差率",
-            size="SKU个数",       # 核心：气泡大小代表 SKU 数量
-            text="显示标签",      # 只显示过滤后的标签
-            color="偏差情况",
-            color_discrete_map={
-                "预测过高": "#ffa940", # 真正的橙色
-                "预测过低": "#722ed1", # 深紫色
-                "正常": "#5da9c4" 
-            },
-            hover_name="品类",
-            hover_data=["SKU个数"],
-            size_max=40,          # 限制气泡最大尺寸，防止遮挡
-            template="simple_white"
-        )
-
-        # --- 5. 视觉细节优化 ---
-        fig_cat.update_traces(
-            textposition='top center',
-            marker=dict(
-                opacity=0.6,      # 设置透明度，重叠时也能看清
-                line=dict(width=1, color='White') # 给气泡加白边，增强层级感
-            )
-        )
-
-        # 添加 0 线和目标区间背景
-        # fig_cat.add_vrect(x0=-0.27, x1=0.27, fillcolor="red", line_width=2)
-        # fig_cat.add_hrect(y0=-0.3, y1=0.3, fillcolor="red", line_width=2)
-        fig_cat.add_vline(
-            x=0.27,
-            line_dash="dash",
-            line_color="red",
-            line_width=3,
-            annotation_text="27%",
-            annotation_position="bottom right"
-        )
-        fig_cat.add_vline(
-            x=-0.27,
-            line_dash="dash",
-            line_color="red",
-            line_width=3,
-            annotation_text="-27%",
-            annotation_position="bottom right"
-        )
-        fig_cat.add_hline(
-            y=-0.3,
-            line_dash="dash",
-            line_color="red",
-            line_width=3,
-            annotation_text="-30%",
-            annotation_position="bottom left"
-        )
-        fig_cat.add_hline(
-            y=0.3,
-            line_dash="dash",
-            line_color="red",
-            line_width=3,
-            annotation_text="30%",
-            annotation_position="bottom left"
-        )
-
-        fig_cat.update_layout(
-            xaxis=dict(title="偏差率", tickformat=".0%"),
-            yaxis=dict(title="环比偏差率", tickformat=".0%"),
-            legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
-            margin=dict(l=20, r=20, t=20, b=20),
-            font=dict(family="Microsoft YaHei"),
-        )
-
-        st.plotly_chart(fig_cat, width='stretch')
+    df_cat["偏差情况"] = df_cat.apply(get_color, axis=1) 
     detail_cat,detail_sku = st.columns([2,3])
     df_cat['单周预测偏差率'] = round(df_cat['单周预测偏差率']*100, 1)
     df_cat['环比预测偏差率'] = round(df_cat['环比预测偏差率']*100, 1)
@@ -1410,24 +1570,31 @@ def predictSales_rate_area(df_yuce, curr_filters):
             """, 
             unsafe_allow_html=True
         )
-        def color_deviation(val):
-            color = '#cf1322' if abs(val) > 0.3 else '#389e0d'
-            return f'color: {color}; font-weight: bold' if abs(val) > 0.3 else f'color: {color}'
 
-        styled_df = df_cat[['品类', '单周预测偏差率', '环比预测偏差率', 'SKU个数', '偏差情况']].sort_values("单周预测偏差率", ascending=False).style.map(
-            color_deviation, subset=['单周预测偏差率', '环比预测偏差率']
+        def color_deviation(val,target):
+            color = '#cf1322' if abs(val) > target else '#389e0d'
+            return f'color: {color}; font-weight: bold' if abs(val) > target else f'color: {color}'
+        df_cat["周数"] = select_week
+        styled_df = df_cat[['周数','品类', '单周预测偏差率', '环比预测偏差率', 'SKU个数', '偏差情况']].sort_values("单周预测偏差率", ascending=False).style.map(
+            color_deviation, subset=['单周预测偏差率'],target=35
         )
-        st.dataframe(styled_df,
+        styled_df = styled_df.map(
+            color_deviation, subset=['环比预测偏差率'],target=5
+        )
+
+        
+        st.dataframe(
+            styled_df,
             column_config={
                 "单周预测偏差率": st.column_config.NumberColumn(
-                    "单周预测偏差率(目标值:±27%)",
+                    "单周预测偏差率(目标值:35%)",
                     help="预测值与实际值的偏移程度",
                     format="%.1f%%",
                     width=80,
                     alignment="center"
                 ),
                 "环比预测偏差率": st.column_config.NumberColumn(
-                    "环比预测偏差率(目标值:±30%)",
+                    "环比预测偏差率(目标值:5%)",
                     help="本周对比上周偏差的变化",
                     format="%.1f%%",
                     width=80,
@@ -1449,33 +1616,37 @@ def predictSales_rate_area(df_yuce, curr_filters):
             """, 
             unsafe_allow_html=True
         )
-        df_detail = df_filtered[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值" ,"单周预测偏差率", "环比预测偏差率"]].copy()
+        df_detail = df_filtered[df_filtered["周数"] == select_week][['周数','子市场', "channel_name",'品类', "主料mrpsku","状态", "当周实际值", "当周预测值" ,"单周预测偏差率", "环比预测偏差率"]].copy()
         df_detail=df_detail.sort_values("单周预测偏差率", ascending=False)
         df_detail['单周预测偏差率'] = round(df_detail['单周预测偏差率']*100, 1)
         df_detail['环比预测偏差率'] = round(df_detail['环比预测偏差率']*100, 1)
-        def color_deviation(val):
-            color = '#cf1322' if abs(val) > 0.27 else '#389e0d'
-            return f'color: {color}; font-weight: bold' if abs(val) > 0.27 else f'color: {color}'
-
-        styled_df = df_detail[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周预测值" ,"单周预测偏差率", "环比预测偏差率"]].sort_values("单周预测偏差率", ascending=False).style.map(
-            color_deviation, subset=['单周预测偏差率', '环比预测偏差率']
+        def color_deviation(val,target):
+            color = '#cf1322' if abs(val) > target else '#389e0d'
+            return f'color: {color}; font-weight: bold' if abs(val) > target else f'color: {color}'
+        styled_df = df_detail[['周数','子市场', "channel_name",'品类', "主料mrpsku","状态", "当周实际值", "当周预测值" ,"单周预测偏差率", "环比预测偏差率"]].sort_values("单周预测偏差率", ascending=False).style.map(
+            color_deviation, subset=['单周预测偏差率'],target=35
+        )
+        styled_df = styled_df.map(
+            color_deviation, subset=['环比预测偏差率'],target=5
         )
         st.dataframe(
             styled_df,
             column_config={
+                "周数": st.column_config.TextColumn("周数", width=20),
                 "子市场": st.column_config.TextColumn("子市场", width=20),
                 "channel_name": st.column_config.TextColumn("渠道", width=20),
                 "品类": st.column_config.TextColumn("品类", width=20),
                 "主料mrpsku": st.column_config.TextColumn("MRPSKU", width=30),
+                "状态": st.column_config.TextColumn("状态", width=20),
                 "当周实际值": st.column_config.NumberColumn("实际周销", format="%d", width=20, alignment="center"),
                 "当周预测值": st.column_config.NumberColumn("预测周销", format="%d", width=20, alignment="center"),
                 # "上周预测值": st.column_config.NumberColumn("上周预测周销", format="%d", width=20, alignment="center"),
                 "单周预测偏差率": st.column_config.NumberColumn(
-                    "单周预测偏差率(目标值:±27%)",
+                    "单周预测偏差率(目标值:35%)",
                     format="%.1f%%", width=50, alignment="center" 
                 ),
                 "环比预测偏差率": st.column_config.NumberColumn(
-                    "环比预测偏差率(目标值:±30%)",
+                    "环比预测偏差率(目标值:5%)",
                     format="%.1f%%", width=50, alignment="center" 
                 )
             },
@@ -1491,24 +1662,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         return
     df=df[df['是否有干预'] == '是']
     # st.subheader("📊 预测准确度监控看板")
-    # --- 1. 顶部 KPI 总览 ---
-    last_dt = df['日期'].max()
-    # last_dt_history = last_dt - pd.DateOffset(days=7)
-    avg_bias = df["单周干预偏差率"].abs().mean()
-    avg_bias_ratio = df["环比干预偏差率"].abs().mean()
-    
-    m_col1, m_col2, m_col3, m_col4,m_col5 = st.columns([1,1,1,1,1])
-    ganyu_intervention_rate = df_ganyu_bi["有干预样本数"].sum() / df_ganyu_bi["总样本数"].sum()
-    m_col1.metric("干预SKU占比", f"{ganyu_intervention_rate:.0%}", delta="目标:15%")
-    m_col2.metric("干预偏差率", f"{avg_bias:.0%}" , delta="目标:30%")
-    m_col3.metric("干预偏差率(环比)", f"{avg_bias_ratio:.0%}", delta="目标:5%")
-    oversku_num = len(df[(df["单周干预偏差率"] > 0.30) | (df["单周干预偏差率"] < -0.30)])
-    m_col4.metric("干预偏差过大SKU", oversku_num,delta=f"占比:{oversku_num / len(df):.0%}",help="干预偏差>30%的SKU数量")
-    oversku_num_ratio = len(df[(df["环比干预偏差率"] > 0.05) | (df["环比干预偏差率"] < -0.05)])
-    m_col5.metric("干预偏差过大SKU(环比)", oversku_num_ratio,delta=f"占比:{oversku_num_ratio / len(df):.0%}",help="环比干预偏差>5%的SKU数量")
-    
-    
-    market_filter, category_filter, sku_filter = st.columns(3)
+    market_filter, category_filter, sku_filter,outStock_filter,week_filter = st.columns(5)
     with market_filter:
         market_list = ["全部市场"] + sorted(df["子市场"].unique().tolist())
         selected_market = st.selectbox("选择要查看的子市场", market_list,key="selectbox_market_ganyu")
@@ -1521,6 +1675,14 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         SKU_list = ["全部SKU"] + sorted(df["主料mrpsku"].unique().tolist())
         selected_sku = st.selectbox("选择要查看的SKU", SKU_list,key="selectbox_sku_ganyu")
         st.session_state.ganyu_filter_sku=selected_sku
+    with outStock_filter:
+        outStock_status_list = ["全部状态","断货","非断货"]
+        select_stockStatus = st.selectbox("选择SKU的状态", outStock_status_list,key="selectbox_outStock_ganyu")
+        st.session_state.ganyu_filter_outStockStatus=select_stockStatus
+    with week_filter:
+        select_week = st.date_input("选择要查看的周数", value=default_monday,key="date_input_week_ganyu")
+        select_week = select_week.strftime("%Yw%V")
+        st.session_state.ganyu_filter_week=select_week
 
     if selected_market == "全部市场":
         df_filtered = df
@@ -1530,95 +1692,95 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category)]
     elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
         df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category) & (df["主料mrpsku"] == selected_sku)]
-    col_left, col_right = st.columns([3,2])
+    
+    if select_stockStatus == "全部状态":
+        df_filtered = df_filtered
+    elif select_stockStatus == "断货":
+        df_filtered = df_filtered[df_filtered["状态"] == "断货"]
+    elif select_stockStatus == "非断货":
+        df_filtered = df_filtered[df_filtered["状态"] != "断货"]
+    
+    avg_bias = df_filtered["单周干预偏差率"].abs().mean()
+    avg_bias_ratio = df_filtered["环比干预偏差率"].abs().mean()
+    m_col1, m_col2, m_col3,m_col4 = st.columns([1,1,1,1])
+    ganyu_intervention_rate = df_ganyu_bi["有干预样本数"].sum() / df_ganyu_bi["总样本数"].sum()
+    m_col1.metric("干预SKU个数占比", f"{ganyu_intervention_rate:.0%}", delta="目标:15%")
+    m_col2.metric("有效干预SKU个数占比", f"{(df_ganyu_bi['有干预样本数'].sum() - df_ganyu_bi['不应干预样本数'].sum()) / df_ganyu_bi['有干预样本数'].sum():.0%}",delta="有效干预规则:±30%")
+    m_col3.metric("干预偏差率", f"{avg_bias:.0%}" , delta="目标:30%")
+    m_col4.metric("干预偏差率(环比)", f"{avg_bias_ratio:.0%}", delta="目标:5%")
+
+    col_left, col_right = st.columns([2,3])
     # 市场维度聚合
     stage_cols = ["单周干预偏差率", "环比干预偏差率"]
     df_market = df_filtered.groupby("子市场")[stage_cols].mean().reset_index()
     df_plot = df_market.melt(id_vars="子市场", value_vars=stage_cols, 
                             var_name="指标类型", value_name="偏差率")
-    
+    if st.session_state.ganyu_filter_market != "全部市场":
+        df_ganyu_bi=df_ganyu_bi[df_ganyu_bi["子市场"] == st.session_state.ganyu_filter_market]
+    df_inter = df_ganyu_bi.sort_values("有干预样本数", ascending=False)
+    df_inter["有效干预数"] = df_inter["有干预样本数"] - df_inter["不应干预样本数"]
     with col_left:
-        st.markdown("#### 干预SKU占比")
-        if st.session_state.ganyu_filter_market != "全部市场":
-            df_ganyu_bi=df_ganyu_bi[df_ganyu_bi["子市场"] == st.session_state.ganyu_filter_market]
-        df_inter = df_ganyu_bi.sort_values("有干预样本数", ascending=False)
-        df_inter["有效干预数"] = df_inter["有干预样本数"] - df_inter["不应干预样本数"]
-        
-        # fig = make_subplots(
-        #     rows=2, cols=1,
-        #     row_heights=[0.4, 0.6],
-        #     vertical_spacing=0.01,
-        #     specs=[[{"type": "domain"}], [{"type": "xy"}]]
-        # )
+        st.markdown("#### 历史干预SKU个数占比趋势")
+        df_inter_week = df_inter.groupby("周数").agg({
+            "总样本数": "sum",
+            "有干预样本数": "sum",
+        }).reset_index()
+        df_inter_week['干预SKU个数占比'] = df_inter_week["有干预样本数"] / df_inter_week["总样本数"]
+        fig_历史干预SKU曲线=go.Figure()
+        fig_历史干预SKU曲线.add_trace(
+            go.Scatter(
+                x=df_inter_week["周数"],
+                y=df_inter_week["干预SKU个数占比"],
+                mode='lines+markers+text',
+                line=dict(color='#1f77b4', width=2),
+                marker=dict(
+                    color="#1f77b4", 
+                    size=20, 
+                    line=dict(width=5, color='white')
+                ),
+                text=df_inter_week["干预SKU个数占比"].apply(lambda x: f"{x:.0%}"),
+                textposition="top left",
+                name="干预SKU个数占比"
+            )
+        )
+        fig_历史干预SKU曲线.add_hline(
+            y=0.15,
+            line_dash="dash",
+            line_color="#1f77b4",  
+            annotation_text="预测偏差: 30%",
+            annotation_position="bottom right",
+            opacity=0.7
+        )
+        fig_历史干预SKU曲线.update_layout(
+            # 左侧 Y 轴配置
+            yaxis=dict(
+                # title="单周干预偏差率",
+                range=[0, 1.0],  
+                tickformat=".0%", 
+                side="left"
+            ),
+            margin=dict(r=80),
+            legend=dict(
+                orientation="h",          # 水平排列
+                yanchor="bottom",         # 垂直方向以底部为锚点
+                y=1.02,                   # 放在绘图区顶部稍微偏上的位置
+                xanchor="center",         # 水平方向以中心为锚点
+                x=0.5,                    # 放在水平方向 50% 的位置（居中）
+                bgcolor="rgba(255,255,255,0.8)" # 可选：设置半透明背景，防止遮挡标题或边框
+            ),
+            font=dict(family="Microsoft YaHei",size=12)
+        )
 
-        # total_val = df_inter["有干预样本数"].sum()
-        # labels = df_inter["子市场"].tolist() + [""]
-        # values = df_inter["有干预样本数"].tolist() + [total_val]
-        # colors = ['#2c7da0', '#468faf', '#61a5c2', '#89c2d9', '#a1c4fd', '#c2e9fb'] * 3
-        # marker_colors = colors[:len(df_inter)] + ['rgba(0,0,0,0)']
+        st.plotly_chart(fig_历史干预SKU曲线,width="stretch",height=500)
 
-        # fig.add_trace(go.Pie(
-        #     labels=labels,
-        #     values=values,
-        #     hole=0.45,
-        #     rotation=90,
-        #     direction='clockwise',
-        #     marker=dict(colors=marker_colors),
-        #     showlegend=False,
-        #     textinfo='label+percent',
-        #     texttemplate=[f"%{{label}}<br>%{{percent}}" if l != "" else "" for l in labels],
-        #     textposition='inside'
-        # ), row=1, col=1)
-        # markets = df_inter["子市场"].tolist()
-        
-        # fig.add_trace(go.Bar(
-        #     x=markets,
-        #     y=df_inter["有干预样本数"],
-        #     name="有干预样本数",
-        #     marker_color="#4D4D4D",
-        #     offsetgroup=1,
-        #     text=df_inter["有干预样本数"],
-        #     textposition='outside'
-        # ), row=2, col=1)
 
-        # fig.add_trace(go.Bar(
-        #     x=markets,
-        #     y=df_inter["有效干预数"],
-        #     name="有效干预",
-        #     marker_color="#46ACC8",
-        #     offsetgroup=2,
-        #     text=df_inter["有效干预数"],
-        #     textposition='outside'
-        # ), row=2, col=1)
-        # # --- 终极布局美化 ---
-        # fig.update_layout(
-        #     height=600, # 增加整体高度
-        #     template="simple_white",
-        #     barmode='group',
-        #     margin=dict(t=80, b=80, l=60, r=60),
-        #     legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="center", x=0.5),
-        #     font=dict(family="Microsoft YaHei")
-        # )
-
-        # # 【修复】坐标轴独立化处理
-        # # 强制 X 轴为类目轴，解决 "0 AP" 问题
-        # fig.update_xaxes(
-        #     type='category', 
-        #     tickmode='array',
-        #     tickvals=list(range(len(markets))),
-        #     ticktext=markets,
-        #     row=2, col=1
-        # )
-        
-        # # 强制 Y 轴从 0 开始，并给上方留出足够空间
-        # max_val = df_inter["有干预样本数"].max()
-        # fig.update_yaxes(
-        #     range=[0, max_val * 1.4], # 留出 40% 的空间画箭头
-        #     showgrid=True, 
-        #     gridcolor='whitesmoke', 
-        #     row=2, col=1
-        # )
-
+    with col_right:
+        st.markdown("#### 干预SKU个数占比")
+        # if st.session_state.ganyu_filter_market != "全部市场":
+        #     df_ganyu_bi=df_ganyu_bi[df_ganyu_bi["子市场"] == st.session_state.ganyu_filter_market]
+        # df_inter = df_ganyu_bi.sort_values("有干预样本数", ascending=False)
+        # df_inter["有效干预数"] = df_inter["有干预样本数"] - df_inter["不应干预样本数"]
+        df_inter=df_inter[df_inter["周数"] == select_week]
         fig = make_subplots(
             rows=1, cols=2,
             column_widths=[0.35, 0.65], # 左侧占比稍小
@@ -1721,20 +1883,108 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
 
         st.plotly_chart(fig, width='stretch')
 
-    # df_m = df_filtered.groupby("子市场")[stage_cols].mean().reset_index()
-    # df_m=df_m[df_m["单周干预偏差率"].notnull()]
-    # df_m = df_m.sort_values(by="单周干预偏差率", ascending=True)
-    df_m = df_filtered.groupby("子市场").agg({
+    df_m = df_filtered[df_filtered["周数"] == select_week].groupby("子市场").agg({
         "单周干预偏差率": "mean",
         "环比干预偏差率": "mean",
         "主料mrpsku": "count"
     }).reset_index()
     df_m = df_m.rename(columns={"主料mrpsku": "SKU数量"})
     df_m = df_m.sort_values(by="SKU数量", ascending=True)
-    with col_right:
-        TARGET_MIN = -0.30
+    col_bias_left, col_bias_right = st.columns([2,3])
+    df_filtered_week = df_filtered.groupby("周数").agg({
+        "单周干预偏差率": "mean",
+        "环比干预偏差率": "mean"
+    }).reset_index()
+
+    with col_bias_left:
+        st.markdown("#### 历史干预偏差趋势")
+        fig_历史干预曲线=go.Figure()
+        fig_历史干预曲线.add_trace(
+            go.Scatter(
+                x=df_filtered_week["周数"],
+                y=df_filtered_week["单周干预偏差率"],
+                mode='lines+markers+text',
+                line=dict(color='#1f77b4', width=2),
+                marker=dict(
+                    color="#1f77b4", 
+                    size=20, 
+                    line=dict(width=5, color='white')
+                ),
+                text=df_filtered_week["单周干预偏差率"].apply(lambda x: f"{x:.0%}"),
+                textposition="top left",
+                name="单周偏差"
+            )
+        )
+        fig_历史干预曲线.add_trace(
+            go.Scatter(
+                x=df_filtered_week["周数"],
+                y=df_filtered_week["环比干预偏差率"],
+                mode='lines+markers+text',
+                line=dict(color='#ff7f0e', width=2),
+                marker=dict(
+                    color="#ff7f0e", 
+                    size=20, 
+                    line=dict(width=5, color='white')
+                ),
+                text=df_filtered_week["环比干预偏差率"].apply(lambda x: f"{x:.0%}"),
+                textposition="bottom left",
+                name="环比偏差",
+                yaxis="y2"
+            )
+        )
+        fig_历史干预曲线.add_hline(
+            y=0.30,
+            line_dash="dash",
+            line_color="#1f77b4",  
+            annotation_text="预测偏差: 30%",
+            annotation_position="bottom right",
+            opacity=0.7
+            
+        )
+        fig_历史干预曲线.add_shape(
+            type="line",
+            xref="paper", yref="y2",
+            x0=0, y0=0.05,
+            x1=1, y1=0.05,
+            line=dict(color="#ff7f0e", width=2, dash="dash"),
+            opacity=0.7
+        )
+        fig_历史干预曲线.update_layout(
+            # 左侧 Y 轴配置
+            yaxis=dict(
+                title="单周干预偏差率",
+                range=[0, 1.5],  
+                tickformat=".0%", 
+                side="left"
+            ),
+            # 右侧 Y 轴配置
+            yaxis2=dict(
+                title="环比干预偏差率",
+                range=[0, 0.2],  
+                tickformat=".0%", 
+                overlaying="y",   
+                side="right"
+            ),
+            # 可选：优化整体布局，防止右侧 Y 轴标题被截断
+            margin=dict(r=80),
+            legend=dict(
+                orientation="h",          # 水平排列
+                yanchor="bottom",         # 垂直方向以底部为锚点
+                y=1.02,                   # 放在绘图区顶部稍微偏上的位置
+                xanchor="center",         # 水平方向以中心为锚点
+                x=0.5,                    # 放在水平方向 50% 的位置（居中）
+                bgcolor="rgba(255,255,255,0.8)" # 可选：设置半透明背景，防止遮挡标题或边框
+            ),
+            font=dict(family="Microsoft YaHei",size=12)
+        )
+
+        st.plotly_chart(fig_历史干预曲线,width="stretch",height=500)
+
+
+
+    with col_bias_right:
         TARGET_MAX = 0.30
-        st.markdown("#### 各市场干预偏差全貌 (目标区间: ±30%)")
+        st.markdown("#### 各市场干预偏差全貌 (目标区间: 30%)")
 
         # --- 2. 创建布局 ---
         fig = make_subplots(
@@ -1743,18 +1993,11 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             horizontal_spacing=0.03, 
             column_widths=[0.7, 0.3]
         )
-        fig.add_vrect(
-            x0=TARGET_MIN, x1=TARGET_MAX, 
-            fillcolor="rgba(82, 196, 26, 0.1)", # 极淡的绿色
-            line_width=0,
-            layer="below", # 放在柱子下面
-            row=1, col=1
-        )
 
         # --- 4. 左侧：单周干预偏差率 (条形图) ---
         # 颜色逻辑：出界的标红，在区间内的用青色
         colors_bar = [
-            "#ff9d4f" if (x > TARGET_MAX or x < TARGET_MIN) else "#5da9c4" 
+            "#ff9d4f" if (x > TARGET_MAX) else "#5da9c4" 
             for x in df_m["单周干预偏差率"]
         ]
 
@@ -1772,13 +2015,15 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             row=1, col=1
         )
 
-        for line_x in [TARGET_MIN, TARGET_MAX]:
+        for line_x in [TARGET_MAX]:
             fig.add_vline(
                 x=line_x, 
                 line_dash="dash", 
                 line_color="red", 
                 line_width=2,
                 row=1, col=1,
+                # 不透明度
+                opacity=0.8
             )
 
 
@@ -1793,7 +2038,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
                 line=dict(color='#bfbfbf', width=3),
                 marker=dict(
                     color=colors_line, 
-                    size=20, 
+                    size=15, 
                     line=dict(width=5, color='white')
                 ),
                 text=df_m["环比干预偏差率"].apply(lambda x: f"{x:.0%}"),
@@ -1802,20 +2047,17 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             ),
             row=1, col=2
         )
-        for line_x in [0.05, -0.05]:
+        for line_x in [0.05]:
             fig.add_vline(
                 x=line_x, 
                 line_dash="dash", 
                 line_color="red", 
                 line_width=2,
-                row=1, col=2
+                row=1, col=2,
+                # 不透明度
+                opacity=0.8
             )
-            
 
-
-
-        # --- 6. 布局精修 ---
-        # 处理 UK 等极端值：确保坐标轴能盖住 ±30%
         max_val = max(df_m["单周干预偏差率"].max(), 0.5)
         min_val = min(df_m["单周干预偏差率"].min(), -0.5)
 
@@ -1827,20 +2069,19 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             xaxis=dict(
                 title="干预偏差率",
                 tickformat=".0%",
-                range=[min_val - 0.1, max_val + 0.3], # 留出文本空间
+                range=[0, max_val+0.3], # 留出文本空间
                 zeroline=True, zerolinecolor="#8c8c8c"
             ),
             xaxis2=dict(
                 title="环比偏差率",
                 tickformat=".0%",
-                range=[-1.1, 1.1], # 环比范围固定，方便观察斜率
+                range=[0, 0.5], # 环比范围固定，方便观察斜率
                 showgrid=False,
                 zeroline=True,
                 # 修改X轴区间范围
                 # tickvals=[-1.1, -0.05, 0, 0.05, 1.1]
             ),
             font=dict(family="Microsoft YaHei"),
-
         )
 
         # 样式细节：隐藏右图Y轴刻度，统一字体
@@ -1850,9 +2091,8 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
 
         st.plotly_chart(fig, width='stretch')
     
-    scatter_cat,detail_cat = st.columns([3,2])
-
-    df_cat = df_filtered.groupby("品类").agg({
+    detail_cat,detail_sku_ganyu = st.columns([2,3])
+    df_cat = df_filtered[df_filtered["周数"] == select_week].groupby("品类").agg({
         "单周干预偏差率": "mean",
         "环比干预偏差率": "mean",
         "主料mrpsku": "nunique" 
@@ -1874,83 +2114,6 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         return "正常"
     
     df_cat["偏差情况"] = df_cat.apply(get_color, axis=1)
-    with scatter_cat:
-        st.markdown(
-            f"""
-            #### 干预情况下钻-<span style='color: #ff4b4b;'>{st.session_state.ganyu_filter_market}</span> 品类健康度象限 (偏差 vs 环比)
-            """, 
-            unsafe_allow_html=True
-        )
-        fig_cat = px.scatter(
-            df_cat,
-            x="单周干预偏差率",
-            y="环比干预偏差率",
-            size="SKU个数",       # 核心：气泡大小代表 SKU 数量
-            text="显示标签",      # 只显示过滤后的标签
-            color="偏差情况",
-            color_discrete_map={
-                "干预过高": "#ffa940",
-                "干预过低": "#391085",
-                "正常": "#5da9c4"
-            },
-            hover_name="品类",
-            hover_data=["SKU个数"],
-            size_max=40,          # 限制气泡最大尺寸，防止遮挡
-            template="simple_white"
-        )
-
-        # --- 5. 视觉细节优化 ---
-        fig_cat.update_traces(
-            textposition='top center',
-            marker=dict(
-                opacity=0.6,      # 设置透明度，重叠时也能看清
-                line=dict(width=1, color='White') # 给气泡加白边，增强层级感
-            )
-        )
-
-        # 添加 0 线和目标区间背景
-        fig_cat.add_vline(
-            x=0.15,
-            line_dash="dash",
-            line_color="red",
-            line_width=3,
-            annotation_text="15%",
-            annotation_position="bottom right"
-        )
-        fig_cat.add_vline(
-            x=-0.15,
-            line_dash="dash",
-            line_color="red",
-            line_width=3,
-            annotation_text="-15%",
-            annotation_position="bottom left"
-        )
-        fig_cat.add_hline(
-            y=-0.3,
-            line_dash="dash",
-            line_color="red",
-            line_width=3,
-            annotation_text="-30%",
-            annotation_position="top left"
-        )
-        fig_cat.add_hline(
-            y=0.3,
-            line_dash="dash",
-            line_color="red",
-            line_width=3,
-            annotation_text="30%",
-            annotation_position="bottom left"
-        )
-        fig_cat.update_layout(
-            xaxis=dict(title="偏差率", tickformat=".0%"),
-            yaxis=dict(title="环比偏差率", tickformat=".0%"),   
-            legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
-            margin=dict(l=20, r=20, t=20, b=20),
-            font=dict(family="Microsoft YaHei"),
-        )
-
-        st.plotly_chart(fig_cat, width='stretch')
-
     df_cat['单周干预偏差率'] = round(df_cat['单周干预偏差率']*100, 1)
     df_cat['环比干预偏差率'] = round(df_cat['环比干预偏差率']*100, 1)
     with detail_cat:
@@ -1960,25 +2123,29 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             """, 
             unsafe_allow_html=True
         )
-        def color_deviation(val):
-            color = '#cf1322' if abs(val) > 0.3 else '#389e0d'
-            return f'color: {color}; font-weight: bold' if abs(val) > 0.3 else f'color: {color}'
-
-        styled_df = df_cat[['品类', '单周干预偏差率', '环比干预偏差率', 'SKU个数', '偏差情况']].sort_values("单周干预偏差率", ascending=False).style.map(
-            color_deviation, subset=['单周干预偏差率', '环比干预偏差率']
+        def color_deviation(val,target):
+            color = '#cf1322' if abs(val) > target else '#389e0d'
+            return f'color: {color}; font-weight: bold' if abs(val) > target else f'color: {color}'
+        df_cat['周数']=select_week
+        styled_df = df_cat[['周数','品类', '单周干预偏差率', '环比干预偏差率', 'SKU个数', '偏差情况']].sort_values("单周干预偏差率", ascending=False).style.map(
+            color_deviation, subset=['单周干预偏差率'], target=30
         )
+        styled_df = styled_df.map(
+            color_deviation, subset=['环比干预偏差率'], target=5
+        )
+
 
         st.dataframe(styled_df,
         column_config={
             "单周干预偏差率": st.column_config.NumberColumn(
-                "单周干预偏差率(目标值:±30%)",
+                "单周干预偏差率(目标值:30%)",
                 help="干预值与实际值的偏移程度",
                 format="%.1f%%",
                 width=80,
                 alignment="center"
             ),
             "环比干预偏差率": st.column_config.NumberColumn(
-                "环比干预偏差率(目标值:±5%)",
+                "环比干预偏差率(目标值:5%)",
                 help="本周对比上周干预偏差的变化",
                 format="%.1f%%",
                 width=80,
@@ -1989,46 +2156,51 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             "品类": st.column_config.TextColumn("品类", width=50),
         },
          width="stretch", height=400, hide_index=True)
-    st.markdown(
+    
+    with detail_sku_ganyu:
+        st.markdown(
             f"""
             #### 干预情况下钻-<span style='color: #ff4b4b;'>{st.session_state.ganyu_filter_market}_{st.session_state.ganyu_filter_category}</span> MRPSKU明细表
             """, 
             unsafe_allow_html=True
         )
-    detail_sku_ganyu, detail_sku = st.columns([3,2])
-    with detail_sku_ganyu:
         inter_list = ["全部"] + sorted(df["是否应该干预"].unique().tolist())
         selected_inter = st.selectbox("是否应该干预", inter_list,key="selectbox_inter")
         if selected_inter != "全部":
             df_filtered = df_filtered[df_filtered["是否应该干预"] == selected_inter]
-        df_detail = df_filtered[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周干预值", "单周干预偏差率", "环比干预偏差率", "是否应该干预"]].copy()
+        df_detail = df_filtered[df_filtered["周数"] == select_week][['周数','子市场', "channel_name",'品类', "主料mrpsku","状态", "当周实际值", "当周干预值", "单周干预偏差率", "环比干预偏差率", "是否应该干预"]].copy()
         df_detail['单周干预偏差率'] = round(df_detail['单周干预偏差率']*100, 1)
         df_detail['环比干预偏差率'] = round(df_detail['环比干预偏差率']*100, 1)
-        def color_deviation(val):
-            color = '#cf1322' if abs(val) > 0.30 else '#389e0d'
-            return f'color: {color}; font-weight: bold' if abs(val) > 0.30 else f'color: {color}'
-
-        styled_df = df_detail[['子市场', "channel_name",'品类', "主料mrpsku", "当周实际值", "当周干预值", "单周干预偏差率", "环比干预偏差率", "是否应该干预"]].sort_values("单周干预偏差率", ascending=False).style.map(
-            color_deviation, subset=['单周干预偏差率', '环比干预偏差率']
+        
+        def color_deviation(val,target):
+            color = '#cf1322' if abs(val) > target else '#389e0d'
+            return f'color: {color}; font-weight: bold' if abs(val) > target else f'color: {color}'
+        styled_df = df_detail[['周数','子市场', "channel_name",'品类', "主料mrpsku","状态", "当周实际值", "当周干预值", "单周干预偏差率", "环比干预偏差率", "是否应该干预"]].sort_values("单周干预偏差率", ascending=False).style.map(
+            color_deviation, subset=['单周干预偏差率'],target=30
+        )
+        styled_df = styled_df.map(
+            color_deviation, subset=['环比干预偏差率'], target=5
         )
         st.dataframe(
             styled_df,
             column_config={
+                "周数": st.column_config.TextColumn("周数",width=50),
                 "子市场": st.column_config.TextColumn("子市场",width=90),
                 "channel_name": st.column_config.TextColumn("渠道",width=90),
                 "品类": st.column_config.TextColumn("品类",width=80),
                 "主料mrpsku": st.column_config.TextColumn("MRPSKU", width="medium"),
+                "状态": st.column_config.TextColumn("状态", width=80),
                 "当周实际值": st.column_config.NumberColumn("实际周销", format="%.0f", width=80, alignment="center"),
                 "当周干预值": st.column_config.NumberColumn("干预周销", format="%.0f", width=80, alignment="center"),
                 "单周干预偏差率": st.column_config.NumberColumn(
-                    "单周干预偏差率",
+                    "单周干预偏差率(目标值:30%)",
                     help="干预值与实际值的偏移程度",
                     format="%.1f%%",
                     width=80,
                     alignment="center"
                 ),
                 "环比干预偏差率": st.column_config.NumberColumn(
-                    "环比干预偏差率",
+                    "环比干预偏差率(目标值:5%)",
                     help="本周对比上周干预偏差的变化",
                     format="%.1f%%",
                     width=80,
@@ -2038,7 +2210,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
             },
             hide_index=True,
             width="stretch",
-            height=200
+            height=300
         )
 
 
@@ -2046,12 +2218,11 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
     df = apply_filters(df_fahuo, curr_filters)
     if df is None or df.empty: return
     
-    stage_cols = ["计划达成率", "配货达成率", "排单达成率", "拣货达成率", "出库达成率"]
+    stage_cols = ["计划达成率", "配货达成率", "排单达成率", "出库达成率"]
     df_avg = df.groupby("子市场").agg({
         "计划达成率": "mean",
         "配货达成率": "mean",
         "排单达成率": "mean",
-        "拣货达成率": "mean",
         "出库达成率": "mean",
         "主料mrpsku": "count"
     }).reset_index()
@@ -2066,7 +2237,6 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
         "计划达成率": 0.9, 
         "配货达成率": 0.9,
         "排单达成率": 1.0,
-        "拣货达成率": 1.0,
         "出库达成率": 1.0
     }
     def style_threshold_clean(col):
@@ -2091,13 +2261,12 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
     )
     with col1:
         st.markdown("#### 📦 全市场发货过程指标全貌")
-        c1,c2,c3,c4,c5 = st.columns(5)
+        c1,c2,c3,c4 = st.columns(4)
         # 如果指标值小于目标就为红色，反之为绿色
         c1.metric("计划达成率", f"{df_avg_allmarket.iloc[0,1]:.1%}",delta="目标: 90%",delta_color="green")
         c2.metric("配货达成率", f"{df_avg_allmarket.iloc[1,1]:.1%}",delta="目标: 90%",delta_color="green")
         c3.metric("排单达成率", f"{df_avg_allmarket.iloc[2,1]:.1%}",delta="目标: 100%",delta_color="green")
-        c4.metric("拣货达成率", f"{df_avg_allmarket.iloc[3,1]:.1%}",delta="目标: 100%",delta_color="green")
-        c5.metric("出库达成率", f"{df_avg_allmarket.iloc[4,1]:.1%}",delta="目标: 100%",delta_color="green")
+        c4.metric("出库达成率", f"{df_avg_allmarket.iloc[3,1]:.1%}",delta="目标: 100%",delta_color="green")
         st.dataframe(
             styled_df, 
             width='stretch', 
@@ -2125,7 +2294,7 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
         else:
             df_filtered = df[df['子市场'] == selected_market]
         st.session_state.filter_market=selected_market
-        stage_cols = ['计划发货量', '配货数量', '排单数量', '拣货量', '实际出库量']
+        stage_cols = ['计划发货量', '配货数量', '排单数量', '实际出库量']
         df_sum = df_filtered[stage_cols].sum().reset_index()
         df_sum.columns = ['执行环节', '数量']
         st.markdown(
@@ -2141,7 +2310,7 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
             orientation='h',
             text='数量',
             color='执行环节',
-            category_orders={"执行环节": ['计划发货量', '配货数量', '排单数量', '拣货量', '实际出库量']},
+            category_orders={"执行环节": ['计划发货量', '配货数量', '排单数量',  '实际出库量']},
             # title=f"子市场 [{selected_market}] 发货全链路执行情况",
             color_discrete_sequence=px.colors.qualitative.Pastel
         )
@@ -2208,7 +2377,7 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
         )
         metric = st.selectbox(
             "🎯 选择分析指标", 
-            ["计划达成率", "配货达成率", "排单达成率", "拣货达成率", "出库达成率"]
+            ["计划达成率", "配货达成率", "排单达成率", "出库达成率"]
         )
         
         # 1. 数据处理
@@ -2222,7 +2391,7 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
         df_category_tab = df_cat_rate.sort_values(metric, ascending=True).reset_index(drop=True)
         
         thresholds = {
-            "计划达成率": 0.9, "配货达成率": 0.9, "排单达成率": 1.0, "拣货达成率": 1.0, "出库达成率": 1.0
+            "计划达成率": 0.9, "配货达成率": 0.9, "排单达成率": 1.0, "出库达成率": 1.0
         }
         target_val = thresholds[metric]
         
@@ -2289,12 +2458,12 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
 
         # 7. 【优化】布局减少留白
         fig.update_layout(
+            title=None,  # 彻底移除标题
+            showlegend=False,
             barmode='overlay',
             plot_bgcolor='white',
             height=chart_real_height,
-            # 大幅减小上下左留白：l(左)=80, r=10, t(上)=30, b(下)=0
-            margin=dict(l=60, r=10, t=0, b=0), 
-            showlegend=False,
+            margin=dict(l=80, r=0, t=0, b=0), 
             font=dict(family="Microsoft YaHei"),
             xaxis=dict(visible=False, range=[0, max(df_category_tab[metric].max(), target_val) * 1.1]),
             xaxis2=dict(visible=False),
@@ -2303,12 +2472,20 @@ def delivery_stock_area(df_fahuo, curr_filters, filter_market,df_country_stock):
                 tickmode="linear",
                 showgrid=False,
                 tickfont=dict(size=12, weight='bold', color='#333333')
-            )
+            ),
+            yaxis2=dict(domain=[0, 1]), 
+            autosize=False,
         )
-
-        # 8. 在 Streamlit 容器中显示
-        # 容器高度自适应，最高500
-        with st.container(height=min(500, chart_real_height + 50)):
+        # st.markdown("""
+        #     <style>
+        #     div[data-testid="stVerticalBlockBorderWrapper"]:has(div.st-key-my-plot-container) .stPlotlyChart {
+        #         margin-top: -270px !important;      
+        #         margin-bottom: 0 !important;
+        #     }
+        #     </style>
+        # """, unsafe_allow_html=True)
+        
+        with st.container(height=min(500, chart_real_height), key="my-plot-container"):
             st.plotly_chart(fig, width='stretch', config={'displayModeBar': False})
     
     with col_ctrl2:
