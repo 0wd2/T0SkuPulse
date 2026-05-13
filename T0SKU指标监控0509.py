@@ -73,7 +73,7 @@ st.markdown("""
 with st.sidebar:
     st.header("⚙️ 配置参数")
     today = date.today()
-    default_monday = today - timedelta(days=today.weekday()) - timedelta(days=7)
+    default_monday = today - timedelta(days=today.weekday()) - timedelta(days=7) - timedelta(days=7)
     t0_date_val = st.date_input("🗓️ 当前周周一", value=default_monday)
     st.session_state.t0_date = t0_date_val
 
@@ -1304,8 +1304,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
         select_stockStatus = st.selectbox("选择SKU的状态", outStock_status_list,key="selectbox_outStock_yuce")
         st.session_state.yuce_filter_outStockStatus=select_stockStatus
     with week_filter:
-
-        select_week = st.date_input("选择要查看的周数", value=st.session_state.t0_date.strftime("%Yw%V"),key="date_input_week_yuce")
+        select_week = st.date_input("选择要查看的周数", value=default_monday,key="date_input_week_yuce")
         select_week = select_week.strftime("%Yw%V")
         st.session_state.yuce_filter_week=select_week
 
@@ -1681,7 +1680,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         select_stockStatus = st.selectbox("选择SKU的状态", outStock_status_list,key="selectbox_outStock_ganyu")
         st.session_state.ganyu_filter_outStockStatus=select_stockStatus
     with week_filter:
-        select_week = st.date_input("选择要查看的周数", value=st.session_state.t0_date.strftime("%Yw%V"),key="date_input_week_ganyu")
+        select_week = st.date_input("选择要查看的周数", value=default_monday,key="date_input_week_ganyu")
         select_week = select_week.strftime("%Yw%V")
         st.session_state.ganyu_filter_week=select_week
 
