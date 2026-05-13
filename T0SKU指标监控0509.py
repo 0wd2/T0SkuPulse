@@ -1304,7 +1304,8 @@ def predictSales_rate_area(df_yuce, curr_filters):
         select_stockStatus = st.selectbox("选择SKU的状态", outStock_status_list,key="selectbox_outStock_yuce")
         st.session_state.yuce_filter_outStockStatus=select_stockStatus
     with week_filter:
-        select_week = st.date_input("选择要查看的周数", value=default_monday,key="date_input_week_yuce")
+
+        select_week = st.date_input("选择要查看的周数", value=st.session_state.t0_date.strftime("%Yw%V"),key="date_input_week_yuce")
         select_week = select_week.strftime("%Yw%V")
         st.session_state.yuce_filter_week=select_week
 
@@ -1680,7 +1681,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         select_stockStatus = st.selectbox("选择SKU的状态", outStock_status_list,key="selectbox_outStock_ganyu")
         st.session_state.ganyu_filter_outStockStatus=select_stockStatus
     with week_filter:
-        select_week = st.date_input("选择要查看的周数", value=default_monday,key="date_input_week_ganyu")
+        select_week = st.date_input("选择要查看的周数", value=st.session_state.t0_date.strftime("%Yw%V"),key="date_input_week_ganyu")
         select_week = select_week.strftime("%Yw%V")
         st.session_state.ganyu_filter_week=select_week
 
@@ -1780,6 +1781,7 @@ def ganyuSales_rate_area(df_ganyu,df_ganyu_bi, curr_filters):
         #     df_ganyu_bi=df_ganyu_bi[df_ganyu_bi["子市场"] == st.session_state.ganyu_filter_market]
         # df_inter = df_ganyu_bi.sort_values("有干预样本数", ascending=False)
         # df_inter["有效干预数"] = df_inter["有干预样本数"] - df_inter["不应干预样本数"]
+        
         df_inter=df_inter[df_inter["周数"] == select_week]
         fig = make_subplots(
             rows=1, cols=2,
