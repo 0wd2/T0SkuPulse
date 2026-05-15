@@ -1,4 +1,3 @@
-from nt import write
 import streamlit as st
 import plotly.graph_objects as go
 import polars as pl
