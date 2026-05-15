@@ -1,3 +1,4 @@
+from nt import write
 import streamlit as st
 import plotly.graph_objects as go
 import polars as pl
@@ -1089,8 +1090,9 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
                 marker=dict(colors=[colors_在库周转_map[x] for x in df_历史海外周转_过滤['在库周转问题定义'].unique()]),
                 textinfo="percent+label", 
                 texttemplate="%{value},<br>%{percent:.1%}",
+                textposition='auto',
                 hovertemplate="%{label}: %{value}个<br>占比: %{percent:.1%}<extra></extra>",
-                insidetextfont=dict(size=14, color="black"),
+                insidetextfont=dict(size=12, color="black"),
                 legendgroup='group1'
             ),
             row=1, col=1
@@ -1104,8 +1106,9 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
                 marker=dict(colors=[colors_在途周转_map[x] for x in df_历史海外周转_过滤['在途周转问题定义'].unique()]),
                 textinfo="percent+label", 
                 texttemplate="%{value},<br>%{percent:.1%}",
+                textposition='auto',
                 hovertemplate="%{label}: %{value}个<br>占比: %{percent:.1%}<extra></extra>",
-                insidetextfont=dict(size=14, color="black"),
+                insidetextfont=dict(size=12, color="black"),
                 legendgroup='group2'
             ),
             row=1, col=2
@@ -1126,19 +1129,19 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
 
     with pie_col2:
         st.dataframe(
-            df_历史海外周转_过滤[['周数','子市场','主料mrpsku','品类','状态','历史当周周销','仿真当周周销','历史海外在库周转','历史海外在途周转',"海外在库周转目标","海外在途周转目标",'在库周转问题定义','在途周转问题定义']],
+            df_历史海外周转_过滤[['周数','子市场','主料mrpsku','品类','状态','历史海外在库周转','历史海外在途周转',"海外在库周转目标","海外在途周转目标",'历史当周周销','仿真当周周销','在库周转问题定义','在途周转问题定义']],
             column_config={
                 "周数": st.column_config.TextColumn("周数", width=10),
                 "子市场": st.column_config.TextColumn("子市场", width=1),
                 "品类": st.column_config.TextColumn("品类", width=1),
                 "主料mrpsku": st.column_config.TextColumn("MRPSKU", width=50),
                 "状态": st.column_config.TextColumn("状态", width=2),
-                "历史当周周销": st.column_config.NumberColumn("真实周销", format="%d", width=20, alignment="center"),
-                "仿真当周周销": st.column_config.NumberColumn("仿真周销", format="%d", width=20, alignment="center"),
+                "历史当周周销": st.column_config.NumberColumn("真实周销", format="%d", width=10, alignment="center"),
+                "仿真当周周销": st.column_config.NumberColumn("仿真周销", format="%d", width=10, alignment="center"),
                 "历史海外在库周转": st.column_config.NumberColumn("真实海外在库周转", format="%d", width=20, alignment="center"),
                 "历史海外在途周转": st.column_config.NumberColumn("真实海外在途周转", format="%d", width=20, alignment="center"),
-                "海外在库周转目标": st.column_config.NumberColumn("海外在库周转目标", format="%d", width=20, alignment="center"),
-                "海外在途周转目标": st.column_config.NumberColumn("海外在途周转目标", format="%d", width=20, alignment="center"),
+                "海外在库周转目标": st.column_config.NumberColumn("海外在库周转目标", format="%d", width=10, alignment="center"),
+                "海外在途周转目标": st.column_config.NumberColumn("海外在途周转目标", format="%d", width=10, alignment="center"),
                 "在库周转问题定义": st.column_config.TextColumn("在库周转问题定义", width=50),
                 "在途周转问题定义": st.column_config.TextColumn("在途周转问题定义", width=50),
             },
