@@ -2797,7 +2797,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
         )
         
 
-        st.plotly_chart(fig_子市场发货, use_container_width=True)
+        st.plotly_chart(fig_子市场发货, width='stretch')
 
 
 
