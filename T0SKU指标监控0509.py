@@ -1,3 +1,4 @@
+from nt import truncate
 import streamlit as st
 import plotly.graph_objects as go
 import polars as pl
@@ -319,7 +320,20 @@ with fixed_container:
             df_历史海外周转 = df_历史海外周转[df_历史海外周转['周数']==last_dt_history]
             历史海外在库周转 = (((((df_历史海外周转['历史当周期初在库'] * df_历史海外周转['单价']).sum() + (df_历史海外周转['历史下周期初在库'] * df_历史海外周转['单价']).sum()) / 2) / ((df_历史海外周转['历史当周周销']*df_历史海外周转['单价'])/7).sum())).round(1)
             历史海外在途周转 = ((((df_历史海外周转['历史当周期初在途'] * df_历史海外周转['单价']).sum() + (df_历史海外周转['历史下周期初在途'] * df_历史海外周转['单价']).sum()) / 2) / ((df_历史海外周转['历史当周周销']*df_历史海外周转['单价'])/7).sum()).round(1)
-            断货率 = df_历史海外周转[df_历史海外周转['状态']=='断货'].shape[0]/df_历史海外周转.shape[0]
+            # 剔除清仓状态、新品FBM状态、新品状态且在库为0的SKU
+            # 断货率 = df_历史海外周转[df_历史海外周转['状态']=='断货'].shape[0]/df_历史海外周转.shape[0]
+            valid_mask = (
+                (df_历史海外周转['状态'] != '清仓') & 
+                (df_历史海外周转['状态'] != '新品FBM') & 
+                ~((df_历史海外周转['状态'] == '新品') & (df_历史海外周转['历史当周期初在库'] == 0))
+            )
+            df_valid = df_历史海外周转[valid_mask]
+
+            # 3. 计算断货率（防止分母为0报错，加个判断）
+            if df_valid.shape[0] > 0:
+                断货率 = (df_valid['状态'] == '断货').sum() / df_valid.shape[0]
+            else:
+                断货率 = 0.0
             c1, c2, c3, c4,c5,c6,c7,c8,c9 = st.columns(9)
             st.markdown(f"""
                 <style>
@@ -914,7 +928,10 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
     last_dt_history = st.session_state.t0_date.strftime("%Yw%V")
     df_历史海外周转 = apply_filters(df_历史海外周转, curr_filters)
     # 未来库存与周转
-    
+    weeks = df['周数'].values[0]
+    df_历史海外周转=df_历史海外周转[df_历史海外周转["周数"] == weeks]
+    # df=df[df["周数"] == last_dt_history]
+
     market_filter, category_filter, sku_filter,outStock_filter = st.columns(4)
     with market_filter:
         market_list_stock = ["全部市场"] + sorted(df["子市场"].unique().tolist())
@@ -933,42 +950,32 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
         select_stockStatus = st.selectbox("选择SKU的状态", outStock_status_list,key="selectbox_outStock_stock")
         st.session_state.stock_filter_outStockStatus=select_stockStatus
     
-    
-    if selected_market == "全部市场":
-        df_filtered = df
-    elif selected_market != "全部市场" and selected_category == "全部品类":
-        df_filtered = df[(df["子市场"] == selected_market)]
-    elif selected_market != "全部市场" and selected_category != "全部品类":
-        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category)]
-    elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
-        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category) & (df["主料mrpsku"] == selected_sku)]
-
-    if select_stockStatus == "全部状态":
-        df_filtered = df_filtered
-    elif select_stockStatus == "断货":
+    df_filtered = df.copy()
+    if selected_market != "全部市场":
+        df_filtered = df_filtered[df_filtered["子市场"] == selected_market]
+    if selected_category != "全部品类":
+        df_filtered = df_filtered[df_filtered["品类"] == selected_category]
+    if selected_sku != "全部SKU":
+        df_filtered = df_filtered[df_filtered["主料mrpsku"] == selected_sku]
+    if select_stockStatus == "断货":
         df_filtered = df_filtered[df_filtered["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_filtered = df_filtered[df_filtered["状态"] != "断货"]
-    
-    if selected_market == "全部市场":
-        df_历史海外周转_过滤 = df_历史海外周转.copy()
-    elif selected_market != "全部市场" and selected_category == "全部品类":
-        df_历史海外周转_过滤 = df_历史海外周转[(df_历史海外周转["子市场"] == selected_market)]
-    elif selected_market != "全部市场" and selected_category != "全部品类":
-        df_历史海外周转_过滤 = df_历史海外周转[(df_历史海外周转["子市场"] == selected_market) & (df_历史海外周转["品类"] == selected_category)]
-    elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
-        df_历史海外周转_过滤 = df_历史海外周转[(df_历史海外周转["子市场"] == selected_market) & (df_历史海外周转["品类"] == selected_category) & (df_历史海外周转["主料mrpsku"] == selected_sku)]
-    if selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
-        df_历史海外周转_过滤 = df_历史海外周转[(df_历史海外周转["子市场"] == selected_market) & (df_历史海外周转["品类"] == selected_category) & (df_历史海外周转["主料mrpsku"] == selected_sku)]
 
-    if select_stockStatus == "全部状态":
-        df_历史海外周转_过滤 = df_历史海外周转_过滤.copy()
-    elif select_stockStatus == "断货":
+    df_历史海外周转_过滤 = df_历史海外周转.copy()
+    if selected_market != "全部市场":
+        df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["子市场"] == selected_market]
+    if selected_category != "全部品类":
+        df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["品类"] == selected_category]
+    if selected_sku != "全部SKU":
+        df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["主料mrpsku"] == selected_sku]
+    if select_stockStatus == "断货":
         df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["状态"] != "断货"]
-       
-
+    
+    
+    # df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["周数"] == select_week]
     df_temp_future = df_filtered.copy()
     df_temp_future['期初在库金额'] = df_temp_future['当周期初在库']*df_temp_future['单价']
     df_temp_future['期末在库金额'] = df_temp_future['下周期初在库']*df_temp_future['单价']
@@ -1021,9 +1028,9 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
     for i, annotation in enumerate(fig['layout']['annotations']):
         annotation['font'] = dict(family="Microsoft YaHei", size=20, color="black")
     
-    fig.add_hline(y=45,line_dash="dash",line_color="#1f77b4", line_width=2,row=1, col=1,annotation_text="P1目标：45天",annotation_position="bottom right")
-    fig.add_hline(y=30,line_dash="dash",line_color="#1f77b4", line_width=2,row=1, col=1,annotation_text="P2目标：30天",annotation_position="bottom right")
-    fig.add_hline(y=60,line_dash="dash",line_color="#ff7f0e", line_width=2,row=1, col=2,annotation_text="目标：60天",annotation_position="bottom right")
+    fig.add_hline(y=45,line_dash="dash",line_color="#CC0033", line_width=2,row=1, col=1,annotation_text="P1目标：45天",annotation_position="top right",opacity=0.7,annotation_font=dict(size=10, color="gray"))
+    fig.add_hline(y=30,line_dash="dash",line_color="#CC0033", line_width=2,row=1, col=1,annotation_text="P2目标：30天",annotation_position="bottom right",opacity=0.7,annotation_font=dict(size=10, color="gray"))
+    fig.add_hline(y=60,line_dash="dash",line_color="#CC0033", line_width=2,row=1, col=2,annotation_text="目标：60天",annotation_position="bottom right" ,opacity=0.7,annotation_font=dict(size=10, color="gray"))
     # 3. 布局优化
     fig.update_layout(
         height=400,
@@ -1403,17 +1410,18 @@ def predictSales_rate_area(df_yuce, curr_filters):
         select_week = select_week.strftime("%Yw%V")
         st.session_state.yuce_filter_week=select_week
 
-    if selected_market == "全部市场":
-        df_filtered = df
-    elif selected_market != "全部市场" and selected_category == "全部品类":
-        df_filtered = df[(df["子市场"] == selected_market)]
-    elif selected_market != "全部市场" and selected_category != "全部品类":
-        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category)]
-    elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
-        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category) & (df["主料mrpsku"] == selected_sku)]
-    if select_stockStatus == "全部状态":
-        df_filtered = df_filtered
-    elif select_stockStatus == "断货":
+
+    df_filtered = df.copy()
+    if selected_market != "全部市场":
+        df_filtered = df_filtered[df_filtered["子市场"] == selected_market]
+
+    if selected_category != "全部品类":
+        df_filtered = df_filtered[df_filtered["品类"] == selected_category]
+
+    if selected_sku != "全部SKU":
+        df_filtered = df_filtered[df_filtered["主料mrpsku"] == selected_sku]
+
+    if select_stockStatus == "断货":
         df_filtered = df_filtered[df_filtered["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_filtered = df_filtered[df_filtered["状态"] != "断货"]
@@ -1483,7 +1491,8 @@ def predictSales_rate_area(df_yuce, curr_filters):
             line_color="#1f77b4",  
             annotation_text="预测偏差: 35%",
             annotation_position="bottom right",
-            opacity=0.7
+            opacity=0.7,
+            annotation_font=dict(size=12, color="gray")
         )
         fig_历史预测曲线.add_shape(
             type="line",
@@ -1492,6 +1501,12 @@ def predictSales_rate_area(df_yuce, curr_filters):
             x1=1, y1=0.05,
             line=dict(color="#ff7f0e", width=2, dash="dash"),
             opacity=0.7
+            # label=dict(
+            #     text="环比预测偏差: 35%",           
+            #     font=dict(color="gray", size=12),
+            #     textposition="bottom right",  
+            #     yanchor="bottom"               
+            # )
         )
         fig_历史预测曲线.update_layout(
             # 左侧 Y 轴配置
@@ -1788,18 +1803,17 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
         select_week = select_week.strftime("%Yw%V")
         st.session_state.ganyu_filter_week=select_week
 
-    if selected_market == "全部市场":
-        df_filtered = df
-    elif selected_market != "全部市场" and selected_category == "全部品类":
-        df_filtered = df[(df["子市场"] == selected_market)]
-    elif selected_market != "全部市场" and selected_category != "全部品类":
-        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category)]
-    elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
-        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category) & (df["主料mrpsku"] == selected_sku)]
-    
-    if select_stockStatus == "全部状态":
-        df_filtered = df_filtered
-    elif select_stockStatus == "断货":
+    df_filtered = df.copy()
+    if selected_market != "全部市场":
+        df_filtered = df_filtered[df_filtered["子市场"] == selected_market]
+
+    if selected_category != "全部品类":
+        df_filtered = df_filtered[df_filtered["品类"] == selected_category]
+
+    if selected_sku != "全部SKU":
+        df_filtered = df_filtered[df_filtered["主料mrpsku"] == selected_sku]
+
+    if select_stockStatus == "断货":
         df_filtered = df_filtered[df_filtered["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_filtered = df_filtered[df_filtered["状态"] != "断货"]
@@ -2382,36 +2396,38 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
         select_week = st.date_input("选择要查看的周数", value=default_monday,key="date_input_week_fahuo")
         select_week = select_week.strftime("%Yw%V")
         st.session_state.fahuo_filter_week=select_week
-    
-    if selected_market == "全部市场":
-        df_filtered = df
-    elif selected_market != "全部市场" and selected_category == "全部品类":
-        df_filtered = df[(df["子市场"] == selected_market)]
-    elif selected_market != "全部市场" and selected_category != "全部品类":
-        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category)]
-    elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
-        df_filtered = df[(df["子市场"] == selected_market) & (df["品类"] == selected_category) & (df["主料mrpsku"] == selected_sku)]
-    if select_stockStatus == "全部状态":
-        df_filtered = df_filtered
-    elif select_stockStatus == "断货":
+
+    df_filtered = df.copy()
+    if selected_market != "全部市场":
+        df_filtered = df_filtered[df_filtered["子市场"] == selected_market]
+
+    if selected_category != "全部品类":
+        df_filtered = df_filtered[df_filtered["品类"] == selected_category]
+
+    if selected_sku != "全部SKU":
+        df_filtered = df_filtered[df_filtered["主料mrpsku"] == selected_sku]
+
+    if select_stockStatus == "断货":
         df_filtered = df_filtered[df_filtered["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_filtered = df_filtered[df_filtered["状态"] != "断货"]
-    
-    if selected_market == "全部市场":
-        df_周转_filtered = df_历史海外周转
-    elif selected_market != "全部市场" and selected_category == "全部品类":
-        df_周转_filtered = df_历史海外周转[(df_历史海外周转["子市场"] == selected_market)]
-    elif selected_market != "全部市场" and selected_category != "全部品类":
-        df_周转_filtered = df_历史海外周转[(df_历史海外周转["子市场"] == selected_market) & (df_历史海外周转["品类"] == selected_category)]
-    elif selected_market != "全部市场" and selected_category != "全部品类" and selected_sku != "全部SKU":
-        df_周转_filtered = df_历史海外周转[(df_历史海外周转["子市场"] == selected_market) & (df_历史海外周转["品类"] == selected_category) & (df_历史海外周转["主料mrpsku"] == selected_sku)]
-    if select_stockStatus == "全部状态":
-        df_周转_filtered = df_周转_filtered
-    elif select_stockStatus == "断货":
+
+    df_周转_filtered = df_历史海外周转.copy()
+    if selected_market != "全部市场":
+        df_周转_filtered = df_周转_filtered[df_周转_filtered["子市场"] == selected_market]
+
+    if selected_category != "全部品类":
+        df_周转_filtered = df_周转_filtered[df_周转_filtered["品类"] == selected_category]
+
+    if selected_sku != "全部SKU":
+        df_周转_filtered = df_周转_filtered[df_周转_filtered["主料mrpsku"] == selected_sku]
+
+    if select_stockStatus == "断货":
         df_周转_filtered = df_周转_filtered[df_周转_filtered["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_周转_filtered = df_周转_filtered[df_周转_filtered["状态"] != "断货"]
+
+
 
     df_filtered_oneweek = df_filtered[df_filtered["周数"]==select_week]
     df_filtered_weeks = df_filtered.copy()
@@ -2486,7 +2502,13 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
 
     with col2:
         st.markdown("#### 📦 发货指标下钻分析-子市场")
-        df_达成率 = df_filtered_weeks.groupby(['子市场', '周数'], as_index=False)['配货达成率'].mean()
+        df_达成率 = df_filtered_weeks.groupby(['子市场', '周数'], as_index=False).agg(
+            配货达成率=('配货达成率', 'mean')
+        )
+        df_SKU数量 = df_filtered_weeks.groupby(['子市场'], as_index=False).agg(
+            SKU数量=('主料mrpsku', 'count')
+        )
+        df_达成率 = pd.merge(df_达成率, df_SKU数量, on=['子市场'], how='left')
         df_周转 = df_周转_filtered_weeks.copy()
         # 提前计算好带单价的金额，提升后续聚合速度
         df_周转['期初在库金额'] = df_周转['历史当周期初在库'] * df_周转['单价']
@@ -2494,129 +2516,31 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
         df_周转['期初在途金额'] = df_周转['历史当周期初在途'] * df_周转['单价']
         df_周转['下周期初在途金额'] = df_周转['历史下周期初在途'] * df_周转['单价']
         df_周转['周销金额'] = df_周转['历史当周周销'] * df_周转['单价']
-        df_周转['是否断货'] = (df_周转['状态'] == '断货')
+
+        exclude_mask = (
+            (df_周转['状态'] == '清仓') | 
+            (df_周转['状态'] == '新品FBM') | 
+            ((df_周转['状态'] == '新品') & (df_周转['历史当周期初在库'] == 0))
+        )
+        df_周转['是否断货'] = np.where(exclude_mask, np.nan, df_周转['状态'] == '断货')
+        # df_周转['是否断货'] = (df_周转['状态'] == '断货')
         df_周转_指标 = df_周转.groupby(['子市场', '周数'], as_index=False).agg(
             海外在库周转=('期初在库金额', lambda x: ((x.sum() + df_周转.loc[x.index, '下周期初在库金额'].sum()) / 2) / (df_周转.loc[x.index, '周销金额'].sum() / 7)),
             海外在途周转=('期初在途金额', lambda x: ((x.sum() + df_周转.loc[x.index, '下周期初在途金额'].sum()) / 2) / (df_周转.loc[x.index, '周销金额'].sum() / 7)),
             断货率=('是否断货', 'mean')
         )
+
         df_周转_指标['海外周转天数'] = df_周转_指标[['海外在库周转', '海外在途周转']].sum(axis=1)
         df_周转_指标[['海外在库周转', '海外在途周转', '海外周转天数']] = df_周转_指标[['海外在库周转', '海外在途周转', '海外周转天数']].round(1)
         result_df = pd.merge(df_达成率, df_周转_指标, on=['子市场', '周数'], how='outer')
         result_df=result_df.fillna(0)
+        result_df['子市场总SKU'] = result_df.groupby('子市场')['SKU数量'].transform('sum')
+        result_df = result_df.sort_values(
+            by=['子市场总SKU', '周数', 'SKU数量'], 
+            ascending=[False, True, False]
+        )
+        result_df = result_df.drop(columns=['子市场总SKU'])
         result_df['周数new'] = result_df["周数"].str[2:]
-        # fig_子市场发货 = make_subplots(
-        #     rows=2, cols=1, 
-        #     shared_xaxes=True,           
-        #     vertical_spacing=0.01,
-        #     row_heights=[0.3, 0.7], 
-        #     specs=[[{"secondary_y": True}], [{"secondary_y": True}]] 
-        # )
-        # result_df['周数new'] = result_df["周数"].str[2:]
-        # fig_子市场发货.add_trace(
-        #     go.Bar(
-        #         x=[result_df['子市场'], result_df['周数new']], 
-        #         y=result_df['海外在库周转'],
-        #         name="海外在库周转",
-        #         marker_color='#85C1E9',
-        #         text=[f"{v:.0f}" for v in result_df['海外在库周转']],
-        #         textposition='outside',
-        #         textfont=dict(size=12, color="black"),
-        #         cliponaxis=False,
-        #         showlegend=True,
-        #         hovertemplate="{name}: {y:.0f}"
-        #     ),
-        #     row=2, col=1, secondary_y=False,
-        # )
-        # fig_子市场发货.add_trace(
-        #     go.Bar(
-        #         x=[result_df['子市场'], result_df['周数new']], 
-        #         y=result_df['海外在途周转'],
-        #         name="海外在途周转",
-        #         marker_color='#f8c471',
-        #         text=[f"{v:.0f}" for v in result_df['海外在途周转']],
-        #         textposition='outside',
-        #         textfont=dict(size=12, color="black"),
-        #         cliponaxis=False,
-        #         showlegend=True,
-        #     ),
-        #     row=2, col=1, secondary_y=False,
-        # )
-
-        # markets = result_df['子市场'].unique()
-        # legend_flag = {'达成率': True, '断货率': True}
-        # for market in markets:
-        #     mask = result_df['子市场'] == market
-        #     sub_df = result_df[mask]
-        #     fig_子市场发货.add_trace(
-        #         go.Scatter(
-        #             x=[sub_df['子市场'], sub_df['周数new']],
-        #             y=sub_df['配货达成率'],
-        #             mode='lines+markers+text',
-        #             line=dict(color='#2E86C1', width=2, shape='spline'),
-        #             marker=dict(color='#2E86C1', size=5, line=dict(width=2, color='#2E86C1')),
-        #             text=[f"{v*100:.0f}%" for v in sub_df['配货达成率']],
-        #             textposition="top center",
-        #             textfont=dict(size=12, color='#2E86C1'),
-        #             showlegend=legend_flag['达成率'],
-        #             name="配货达成率"
-        #         ),
-        #         row=1, col=1, secondary_y=False
-        #     )
-        #     legend_flag['达成率'] = False
-        #     fig_子市场发货.add_trace(
-        #         go.Scatter(
-        #             x=[sub_df['子市场'], sub_df['周数new']],
-        #             y=sub_df['断货率'],
-        #             mode='lines+markers+text',
-        #             line=dict(color='gray', width=2, shape='spline'),
-        #             marker=dict(color='#666666', size=5, line=dict(width=2, color='#666666')),
-        #             text=[f"{v*100:.0f}%" for v in sub_df['断货率']],
-        #             textposition="bottom center",
-        #             textfont=dict(color='#666666', size=12),
-        #             showlegend=legend_flag['断货率'],
-        #             name="断货率"
-        #         ),
-        #         row=1, col=1, secondary_y=True
-        #     )
-        #     legend_flag['断货率'] = False
-
-        # fig_子市场发货.update_layout(
-        #     barmode='stack',
-        #     height=650,
-        #     legend=dict(
-        #         orientation="h",
-        #         yanchor="bottom",
-        #         y=1.02,
-        #         xanchor="center",
-        #         x=0.5,
-        #         font=dict(size=16, color="black")
-        #     ),
-        #     plot_bgcolor='white',
-        #     margin=dict(t=10, b=10, l=10, r=10),
-        #     font=dict(family="Microsoft YaHei")
-        # )
-
-        # fig_子市场发货.update_xaxes(visible=False, row=1, col=1) 
-        # fig_子市场发货.update_yaxes(visible=False, row=1, col=1,range=[-0.1, 1.2])
-        # fig_子市场发货.update_yaxes(showgrid=False, zeroline=False, range=[0, result_df['海外周转天数'].max() * 1.1], row=2, col=1, secondary_y=False)
-        # fig_子市场发货.update_yaxes(
-        #     showgrid=False,
-        #     zeroline=False,
-        #     range=[-0.1, 0.5],
-        #     row=1,
-        #     col=1,
-        #     secondary_y=True
-        # )                           
-        # fig_子市场发货.update_yaxes(visible=False, row=2, col=1, secondary_y=True)
-        # fig_子市场发货.update_xaxes(
-        #     tickangle=60,          
-        #     showdividers=True,    
-        #     dividercolor="#999999",
-        #     row=2, col=1,
-        #     tickfont=dict(size=12, color="black")
-        # )
-        # st.plotly_chart(fig_子市场发货, width='stretch')
         fig_子市场发货 = make_subplots(
             rows=2, cols=1, 
             shared_xaxes=True,          
@@ -2697,8 +2621,8 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
             row=1, col=1
         )
 
-        # top_y1 = (result_df['海外在库周转'].fillna(0) + result_df['海外在途周转'].fillna(0)).max() * 1.1
-        top_y1 = 430
+        top_y1 = (result_df['海外在库周转'].fillna(0) + result_df['海外在途周转'].fillna(0)).max() * 1.1
+        # top_y1 = 430
         y_constant_list = [top_y1] * len(result_df)
         # 断货率如何大于0字体就是红色否则是绿色
         def get_trend_text_and_color(val):
@@ -2764,6 +2688,25 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
                     )
                 )
             )
+        
+        shapes.append(
+            dict(
+                type="line",
+                xref="x2 domain", # 对应下方子图的横向全宽
+                yref="y2",        # 对应下方子图的 Y 轴数值
+                x0=0,
+                x1=1,
+                y0=105,
+                y1=105,
+                line=dict(
+                    color="#CC0033",  #深红色
+                    width=1.5,             
+                    dash="dash"
+                ),
+                layer="above",
+                opacity=0.9
+            )
+        )
 
         # ==================== 样式与坐标轴更新 ====================
         fig_子市场发货.update_layout(
@@ -2795,7 +2738,18 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
             row=2, col=1,
             tickfont=dict(size=12, color="black")
         )
-        
+        fig_子市场发货.add_annotation(
+            xref="x2 domain",
+            yref="y2",
+            x=0.99,            # 靠近右侧 (0.99 留一点点边距)
+            y=105,             # 对应 Y 轴 105 的位置
+            text="海外周转天数: 105",
+            showarrow=False,   # 不显示箭头
+            xanchor="right",   # 文字右对齐
+            yanchor="top",     # 文字在坐标下方 (对应之前的 bottom right)
+            font=dict(size=12, color="black"),
+            opacity=0.8
+        )
 
         st.plotly_chart(fig_子市场发货, width='stretch')
 
@@ -2826,16 +2780,31 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
     df_filtered_sorted = df_filtered_oneweek.sort_values("缺口", ascending=False)
 
     # 计算市场品类断货率
+
+    # result_cat_df = df_周转_filtered_oneweek.groupby(
+    #     ["子市场","品类"],
+    #     as_index=False
+    # ).agg(
+    #     断货率=('状态', lambda x: (x == '断货').mean())
+    # )
+
+    exclude_mask = (
+        (df_周转_filtered_oneweek['状态'] == '清仓') | 
+        (df_周转_filtered_oneweek['状态'] == '新品FBM') | 
+        ((df_周转_filtered_oneweek['状态'] == '新品') & (df_周转_filtered_oneweek['历史当周期初在库'] == 0))
+    )
+    df_周转_filtered_oneweek['用于计算断货的状态'] = np.where(exclude_mask, np.nan, (df_周转_filtered_oneweek['状态'] == '断货').astype(float))
     result_cat_df = df_周转_filtered_oneweek.groupby(
-        ["子市场","品类"],
+        ["子市场", "品类"],
         as_index=False
     ).agg(
-        断货率=('状态', lambda x: (x == '断货').mean())
+        断货率=('用于计算断货的状态', 'mean')
     )
+    df_周转_filtered_oneweek.drop(columns=['用于计算断货的状态'], inplace=True)
     
     df_filtered_sorted_merge = pd.merge(df_filtered_sorted, result_cat_df, on=["子市场","品类"], how="left")
     df_filtered_sorted_merge=df_filtered_sorted_merge[[
-        "子市场","主料mrpsku", "品类", "运输方式","计划发货量", "配货数量", "配货达成率","历史海外在库周转","历史海外在途周转","断货率","排单数量",  "实际出库量", "计划未达成原因"
+        "子市场","主料mrpsku", "品类","状态", "运输方式","计划发货量", "配货数量", "配货达成率","历史海外在库周转","历史海外在途周转","断货率","排单数量",  "实际出库量", "计划未达成原因"
     ]]
     def color_deviation1(val,target):
         color = '#389e0d' if abs(val) > target else '#cf1322'
@@ -2856,6 +2825,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
             "子市场": st.column_config.TextColumn("子市场", width=0.5),
             "品类": st.column_config.TextColumn("品类", width=0.5),
             "主料mrpsku": st.column_config.TextColumn("主料mrpsku", width=5),
+            "状态": st.column_config.TextColumn("状态", width=0.5),
             "运输方式": st.column_config.TextColumn("运输方式", width=0.1),
             "计划发货量": st.column_config.NumberColumn("计划发货量", format="%d", alignment="center",width=1),
             "配货数量": st.column_config.NumberColumn("配货数量", format="%d", alignment="center",width=1),
