@@ -5,3 +5,8 @@ pandas
 openpyxl
 numpy
 fastexcel
+xlsxwriter
+io
+datetime
+warnings
+time
