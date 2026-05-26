@@ -6,6 +6,5 @@ openpyxl
 numpy
 fastexcel
 xlsxwriter
-io
 datetime
 time
