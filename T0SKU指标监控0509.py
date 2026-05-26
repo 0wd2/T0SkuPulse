@@ -13,6 +13,7 @@ import fastexcel
 warnings.filterwarnings("ignore")
 import io
 import time
+from xlsxwriter import Workbook
 
 # 1、设置页面标题
 st.set_page_config(page_title="T0SKU指标监控", layout="wide", page_icon="📊")
@@ -60,6 +61,7 @@ if "df_历史海外周转" not in st.session_state: st.session_state.df_历史�
 if "df_LT前预测偏差" not in st.session_state: st.session_state.df_LT前预测偏差 = None
 if "df_断货无在途" not in st.session_state: st.session_state.df_断货无在途 = None
 
+
 st.markdown("""
         <style>
         /* 1. 强制放大 Label (指标名称) */
@@ -76,6 +78,70 @@ st.markdown("""
         }
         </style>
         """, unsafe_allow_html=True)
+        
+@st.cache_data(show_spinner="正在解析并格式化数据，请稍候...", ttl=3600)
+def process_uploaded_files(uploaded_files):
+    """
+    处理所有上传的文件并返回一个字典，存储各业务数据框。
+    使用缓存避免重复读取大文件。
+    """
+    data_pool = {
+        "df_fahuo": None, "df_yuce": None, "df_ganyu": None,
+        "df_stock_turnover": None, "df_country_turnover": None,
+        "df_历史海外周转": None, "df_LT前预测偏差": None,
+        "df_断货无在途": None, "stock_turnover": None
+    }
+
+    for uploaded_file in uploaded_files:
+        file_name = uploaded_file.name
+        file_bytes = uploaded_file.getvalue()
+        file_type = file_name.split('.')[-1].lower()
+
+        try:
+            if file_type == 'xlsx':
+                # 使用 BytesIO 读取
+                with io.BytesIO(file_bytes) as f:
+                    # 获取所有 Sheet 名称
+                    workbook = load_workbook(f, read_only=True)
+                    sn = workbook.sheetnames
+                    
+                    # 定义内部格式化工具
+                    def format_df(df):
+                        if df is not None and not df.empty:
+                            if '日期' in df.columns:
+                                df['日期'] = pd.to_datetime(df['日期'])
+                            return df
+                        return None
+
+                    # 批量读取各 Sheet
+                    if '发货指标' in sn: 
+                        data_pool["df_fahuo"] = format_df(pl.read_excel(f, sheet_name='发货指标').to_pandas())
+                    if '预测偏差' in sn: 
+                        data_pool["df_yuce"] = format_df(pl.read_excel(f, sheet_name='预测偏差').to_pandas())
+                    if '干预偏差' in sn: 
+                        data_pool["df_ganyu"] = format_df(pl.read_excel(f, sheet_name='干预偏差').to_pandas())
+                    if '库存与周转' in sn: 
+                        data_pool["df_stock_turnover"] = format_df(pl.read_excel(f, sheet_name='库存与周转').to_pandas())
+                    if '国内库存周转' in sn: 
+                        data_pool["df_country_turnover"] = format_df(pl.read_excel(f, sheet_name='国内库存周转').to_pandas())
+                    if '历史海外周转' in sn: 
+                        data_pool["df_历史海外周转"] = format_df(pl.read_excel(f, sheet_name='历史海外周转').to_pandas())
+                    if 'LT前预测偏差' in sn: 
+                        data_pool["df_LT前预测偏差"] = format_df(pl.read_excel(f, sheet_name='LT前预测偏差').to_pandas())
+                    if '断货无在途' in sn: 
+                        data_pool["df_断货无在途"] = format_df(pl.read_excel(f, sheet_name='断货无在途').to_pandas())
+            
+            elif file_type == 'parquet':
+                with io.BytesIO(file_bytes) as f:
+                    data_pool["stock_turnover"] = pd.read_parquet(f)
+                    
+        except Exception as e:
+            st.error(f"解析文件 {file_name} 时出错: {e}")
+            
+    return data_pool
+
+
+
 
 # 3、侧边栏配置
 with st.sidebar:
@@ -85,40 +151,21 @@ with st.sidebar:
     t0_date_val = st.date_input("🗓️ 当前周周一", value=default_monday)
     st.session_state.t0_date = t0_date_val
 
-    up_folder_btn = st.file_uploader("请选择上传文件：", type=['xlsx','parquet'],accept_multiple_files=True)
-    if up_folder_btn is not None:
-        for uploaded_file in up_folder_btn:
-            try:
-                file_name = uploaded_file.name
-                file_bytes = uploaded_file.getvalue()
-                file_type = file_name.split('.')[-1].lower()
-                df_mapping = {} 
-                if file_type == 'xlsx':
-                    workbook = load_workbook(BytesIO(file_bytes), read_only=True)
-                    sn = workbook.sheetnames
-                    def read_and_format(sheet):
-                        df = pl.read_excel(file_bytes, sheet_name=sheet, raise_if_empty=False).to_pandas()
-                        if '日期' in df.columns: df['日期'] = pd.to_datetime(df['日期'])
-                        return df
-                    if '发货指标' in sn: st.session_state.df_fahuo = read_and_format('发货指标')
-                    if '预测偏差' in sn: st.session_state.df_yuce = read_and_format('预测偏差')
-                    if '干预偏差' in sn: st.session_state.df_ganyu = read_and_format('干预偏差')
-                    # if '干预比例' in sn: st.session_state.df_ganyu_bi = read_and_format('干预比例')
-                    if '库存与周转' in sn: st.session_state.df_stock_turnover = read_and_format('库存与周转')
-                    # if '国内库存数据' in sn: st.session_state.df_country_stock = read_and_format('国内库存数据')
-                    if '国内库存周转' in sn: st.session_state.df_country_turnover = read_and_format('国内库存周转')
-                    if '历史海外周转' in sn: st.session_state.df_历史海外周转 = read_and_format('历史海外周转')
-                    if 'LT前预测偏差' in sn: st.session_state.df_LT前预测偏差 = read_and_format('LT前预测偏差')
-                    if '断货无在途' in sn: st.session_state.df_断货无在途 = read_and_format('断货无在途')
-                elif file_type == 'parquet':
-                    st.session_state.stock_turnover = pd.read_parquet(file_bytes)
-
-                st.success("✅ 数据加载成功")
-            except Exception as e:
-                st.error(f"❌ 读取失败: {e}")
+    up_folder_btn = st.file_uploader("请选择上传文件：", type=['xlsx','parquet'], accept_multiple_files=True)
     
-    st.divider() # --- 分割线 ---
-
+    if up_folder_btn:
+        # 调用缓存函数处理文件
+        with st.spinner("正在快速加载数据..."):
+            processed_data = process_uploaded_files(up_folder_btn)
+            
+            # 将处理后的数据更新到 session_state（仅在有值时更新，避免覆盖已有的其他数据）
+            for key, df in processed_data.items():
+                if df is not None:
+                    st.session_state[key] = df
+            
+            st.success("✅ 数据加载完成 (已缓存)")
+    
+    st.divider()
     # --- 第三部分：目录大纲 ---
     st.sidebar.subheader("📌 快速导航")
 
@@ -1508,7 +1555,6 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
                     current_color = 'gray'
                     current_offsetgroup = 0
                 
-
                 fig_turnover.add_trace(go.Bar(
                     x=[dim], 
                     y=[row['数量']],
@@ -1517,14 +1563,12 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
                     marker_color=current_color,
                     text=[row['数量']] if row['数量'] > 0 else [""], # 0值不显示文字
                     textposition='outside', # 堆叠图建议文字在内部，总量在外部（见下文）
-                    # offsetgroup=current_offsetgroup,
                     offsetgroup="identical",  
                     # alignmentgroup="identical", 
                     legendgroup=dim,       # 按维度分组图例
                     hovertemplate=f"维度: {dim}<br>区间: {interval}<br>数量: %{{y}}<extra></extra>",
                     textfont=dict(size=14,family="Microsoft YaHei", color="black"),
                 ))
-
         # 6. 配置布局
         fig_turnover.update_layout(
             barmode='stack',
