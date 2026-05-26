@@ -8,5 +8,4 @@ fastexcel
 xlsxwriter
 io
 datetime
-warnings
 time
