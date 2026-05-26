@@ -18,7 +18,6 @@ from xlsxwriter import Workbook
 # 1、设置页面标题
 st.set_page_config(page_title="T0SKU指标监控", layout="wide", page_icon="📊")
 
-# --- CSS 注入：实现表头与筛选面板固定 ---
 # st.markdown("""
 #     <style>
 #     /* 强制固定顶部容器 */
@@ -53,7 +52,6 @@ if "target_week" not in st.session_state: st.session_state.target_week = None
 if "committed_filters" not in st.session_state:
     st.session_state.committed_filters = {"sub_market": [], "category": [], "mrpsku": []}
 if "stock_turnover" not in st.session_state: st.session_state.stock_turnover = None
-# if "df_country_stock" not in st.session_state: st.session_state.df_country_stock = None
 if "filter_market" not in st.session_state: st.session_state.filter_market = None
 if "df_country_turnover" not in st.session_state: st.session_state.df_country_turnover = None
 if "df_stock_turnover" not in st.session_state: st.session_state.df_stock_turnover = None
@@ -470,66 +468,6 @@ def apply_filters(df, filters):
     return df
 
 @st.fragment
-def plot_inventorySales_rate(df_kuxiao, filters):
-    df = apply_filters(df_kuxiao, filters)
-    if df is None or df.empty: return
-    st.markdown("### 📦 海外库存周转")
-    df_avg = df.groupby(['日期', '数据类型'])['库销比'].mean().reset_index().sort_values('日期')
-    fig = go.Figure()
-    colors = {"在库库销比": "#92ABDF", "发货前_在途库销比": "#F4B483", "发货后_在途库销比": "#FEDB63"}
-    for dtype in df_avg['数据类型'].unique():
-        sub = df_avg[df_avg['数据类型'] == dtype]
-        fig.add_trace(go.Scatter(x=sub['日期'], y=sub['库销比'], mode='lines+markers', name=dtype,
-                                 line=dict(width=3, color=colors.get(dtype))
-        ))
-        # ================= 新增：添加基准线 =================
-        # 添加在库库销比基准线 (y=4)
-        fig.add_hline(
-            y=4,
-            line_dash="dash",  # 设置为虚线
-            line_color=colors.get("在库库销比", "#92ABDF"),  # 保持颜色一致
-            annotation_text="在库基准线: 4",
-            annotation_position="bottom right",  # 文字显示位置
-            opacity=0.7  # 设置透明度，避免抢了主数据的视觉焦点
-        )
-
-        # 添加在途库销比基准线 (y=8)
-        fig.add_hline(
-            y=8,
-            line_dash="dash",
-            line_color=colors.get("发货前_在途库销比", "#FEDB63"),
-            annotation_text="在途基准线: 8",
-            annotation_position="top right",
-            opacity=0.7
-        )
-    fig.update_layout(
-        title=dict(text="在库在途库销比趋势", x=0.01, font=dict(size=16)),
-        hovermode="x unified",
-        margin=dict(l=50, r=20, t=60, b=50),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        plot_bgcolor='white',
-        xaxis=dict(
-            showgrid=True, 
-            gridcolor='#F3F4F6', 
-            type='date', 
-            tickformat='%Y-%m-%d', 
-            tickangle=-70,
-            dtick=86400000.0, 
-            tickvals=df_avg['日期'].unique().tolist(),
-            automargin=True 
-            ),
-        yaxis=dict(
-            showgrid=True, 
-            gridcolor='#F3F4F6', 
-            title="库销比", 
-            tickformat=".1f",
-            range=[0,15]
-        ),
-        font=dict(family="Microsoft YaHei"),
-    )
-    st.plotly_chart(fig, width='stretch')
-
-@st.fragment
 def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filters):
     df = apply_filters(df_stock_turnover, curr_filters)
     last_dt_history = st.session_state.t0_date.strftime("%Yw%V")
@@ -879,7 +817,7 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
             file_name=f'海外在库在途下一步动作_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-    stock_col1,stock_col2 = st.columns([1,2])
+    stock_col1,stock_col2 = st.columns([1,3])
     with stock_col1:
         st.markdown("#### SKU个数汇总")
         stock_counts = df_future_single_oneweek['未来海外在库周转区间'].value_counts().sort_index().reset_index()
@@ -923,42 +861,68 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
         }
         plot_df['rank'] = plot_df['区间'].map(interval_rank)
         plot_df = plot_df.sort_values(by=['维度', 'rank'], ascending=True)
+        SMALL_VALUE_THRESHOLD = 100
         for dim in dimensions_order:
             dim_data = plot_df[plot_df['维度'] == dim]
-            
-            # 5. 再循环该维度下的 区间
+            cumulative_y = 0 
             for _, row in dim_data.iterrows():
                 interval = row['区间']
-                
-                # 颜色设置逻辑
+                value = row['数量']
                 if dim == '未来海外在库':
                     current_color = stock_color_map.get(interval)
-                    current_offsetgroup = 1
                 elif dim == '未来海外在途':
                     current_color = onway_color_map.get(interval)
-                    current_offsetgroup = 2
-                else: # SKU总数
+                else:
                     current_color = 'gray'
-                    current_offsetgroup = 0
-                
+                show_text = value >= SMALL_VALUE_THRESHOLD
                 fig_turnover.add_trace(go.Bar(
-                    x=[dim], 
-                    y=[row['数量']],
+                    x=[dim],
+                    y=[value],
                     width=0.4,
-                    name=f"{dim}-{interval}", # 图例只显示区间名，不加维度前缀更整洁
+                    name=f"{dim}-{interval}",
                     marker_color=current_color,
-                    text=[row['数量']] if row['数量'] > 0 else [""], # 0值不显示文字
-                    textposition='outside', # 堆叠图建议文字在内部，总量在外部（见下文）
-                    offsetgroup="identical",  
-                    # alignmentgroup="identical", 
-                    legendgroup=dim,       # 按维度分组图例
+                    text=[value] if show_text else [""],
+                    textposition='inside' if show_text else 'none',
+                    legendgroup=dim,
                     hovertemplate=f"维度: {dim}<br>区间: {interval}<br>数量: %{{y}}<extra></extra>",
-                    textfont=dict(size=14,family="Microsoft YaHei", color="black"),
+                    textfont=dict(
+                        size=14,
+                        family="Microsoft YaHei",
+                        color="black"
+                    ),
                 ))
+                if value < SMALL_VALUE_THRESHOLD and value > 0:
+                    fig_turnover.add_annotation(
+                        x=dim,
+                        y = cumulative_y + value / 2,
+                        text=str(value),
+                        showarrow=True,
+                        arrowhead=2,
+                        arrowsize=1,
+                        arrowwidth=1.5,
+                        arrowcolor="black",
+                        ax=50,   # 水平方向偏移
+                        ay=-10,  # 垂直方向偏移
+                        font=dict(
+                            size=12,
+                            color="black"
+                        ),
+                        bgcolor="rgba(255,255,255,0.8)"
+                    )
+                cumulative_y += value
+
         # 6. 配置布局
+        fig_turnover.update_xaxes(
+            tickfont=dict(size=14, color="black")
+        )
         fig_turnover.update_layout(
-            barmode='stack',
-            xaxis=dict(categoryorder='array', categoryarray=dimensions_order,color='gray'),
+            barmode='relative',
+            bargap=0.5,
+            xaxis=dict(
+                categoryorder='array', 
+                categoryarray=dimensions_order,
+                color='gray',
+            ),
             legend=dict(
                 orientation="h",
                 traceorder="normal",
@@ -1305,7 +1269,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             return processed_data
         excel_data = to_excel(df_cat)
         download_button.download_button(
-            label="📥下载 筛选后品类明细表",
+            label="📥下载 品类明细表",
             data=excel_data,
             file_name=f'品类明细表_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -1373,7 +1337,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             return processed_data
         excel_data = to_excel(df_detail)
         download_button.download_button(
-            label="📥下载 筛选后MRPSKU明细表",
+            label="📥下载 MRPSKU明细表",
             data=excel_data,
             file_name=f'MRPSKU明细表_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -1931,7 +1895,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
             return processed_data
         excel_data = to_excel(df_cat)
         download_button.download_button(
-            label="📥下载 筛选后品类明细表",
+            label="📥下载 品类明细表",
             data=excel_data,
             file_name=f'品类干预明细表_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -2000,7 +1964,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
                 return processed_data
             excel_data = to_excel(df_detail)
             download_button.download_button(
-                label="📥下载 筛选后MRPSKU明细表",
+                label="📥下载 MRPSKU明细表",
                 data=excel_data,
                 file_name=f'MRPSKU干预明细表_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
                 mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -2641,12 +2605,12 @@ def actual_turnover_area(df_country_turnover,df_历史海外周转,filters):
         'sales_val': 'sum', 'is_duanhua': 'mean'
     })
 
-    res_hw['海外在库周转'] = ((res_hw['stock_val'] + res_hw['next_stock_val']) / 2) / (res_hw['sales_val'] / 7)
-    res_hw['海外在途周转'] = ((res_hw['transit_val'] + res_hw['next_transit_val']) / 2) / (res_hw['sales_val'] / 7)
+    res_hw['海外在库周转'] = (((res_hw['stock_val'] + res_hw['next_stock_val']) / 2) / (res_hw['sales_val'] / 7)).round(1)
+    res_hw['海外在途周转'] = (((res_hw['transit_val'] + res_hw['next_transit_val']) / 2) / (res_hw['sales_val'] / 7)).round(1)
     res_hw['断货率'] = res_hw['is_duanhua'] * 100
     # 合并结果
     result_df = pd.concat([res_ct['国内在库周转'], res_hw[['海外在库周转', '海外在途周转', '断货率']]], axis=1).reset_index()
-    result_df['海外总周转'] = result_df['海外在库周转'] + result_df['海外在途周转']
+    result_df['海外总周转'] = (((result_df['海外在库周转'] + result_df['海外在途周转']).round(1)))
     fig_历史周转 = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True, 
