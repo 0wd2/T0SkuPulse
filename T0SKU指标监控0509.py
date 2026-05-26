@@ -11,6 +11,8 @@ import numpy as np
 import warnings
 import fastexcel
 warnings.filterwarnings("ignore")
+import io
+import time
 
 # 1、设置页面标题
 st.set_page_config(page_title="T0SKU指标监控", layout="wide", page_icon="📊")
@@ -55,6 +57,8 @@ if "filter_market" not in st.session_state: st.session_state.filter_market = Non
 if "df_country_turnover" not in st.session_state: st.session_state.df_country_turnover = None
 if "df_stock_turnover" not in st.session_state: st.session_state.df_stock_turnover = None
 if "df_历史海外周转" not in st.session_state: st.session_state.df_历史海外周转 = None
+if "df_LT前预测偏差" not in st.session_state: st.session_state.df_LT前预测偏差 = None
+if "df_断货无在途" not in st.session_state: st.session_state.df_断货无在途 = None
 
 st.markdown("""
         <style>
@@ -104,6 +108,8 @@ with st.sidebar:
                     # if '国内库存数据' in sn: st.session_state.df_country_stock = read_and_format('国内库存数据')
                     if '国内库存周转' in sn: st.session_state.df_country_turnover = read_and_format('国内库存周转')
                     if '历史海外周转' in sn: st.session_state.df_历史海外周转 = read_and_format('历史海外周转')
+                    if 'LT前预测偏差' in sn: st.session_state.df_LT前预测偏差 = read_and_format('LT前预测偏差')
+                    if '断货无在途' in sn: st.session_state.df_断货无在途 = read_and_format('断货无在途')
                 elif file_type == 'parquet':
                     st.session_state.stock_turnover = pd.read_parquet(file_bytes)
 
@@ -255,24 +261,27 @@ with fixed_container:
         c1, c2, c3, c4, c5 = st.columns([3, 3, 3, 1, 1], vertical_alignment="bottom")
         with c1:
             ui_market = st.multiselect("🌍 子市场", sorted(df_ref['子市场'].unique().tolist()), key=f"m_{ver}")
+            st.session_state.committed_filters["sub_market"] = ui_market
         with c2:
             cat_opts = df_ref[df_ref['子市场'].isin(ui_market)]['品类'].unique() if ui_market else df_ref[
                 '品类'].unique()
             ui_category = st.multiselect("📦 品类", sorted(cat_opts.tolist()), key=f"c_{ver}")
+            st.session_state.committed_filters["category"] = ui_category
         with c3:
             sku_opts = df_ref[df_ref['品类'].isin(ui_category)]['主料mrpsku'].unique() if ui_category else df_ref[
                 '主料mrpsku'].unique()
             ui_sku = st.multiselect("🔑 MRPSKU", sorted(sku_opts.tolist()), key=f"s_{ver}")
-        with c4:
-            if st.button("🚀 确认", width='stretch', type="primary"):
-                st.session_state.committed_filters = {"sub_market": ui_market, "category": ui_category,
-                                                      "mrpsku": ui_sku}
-                st.rerun()
-        with c5:
-            if st.button("重置", width='stretch'):
-                st.session_state.filter_ver += 1
-                st.session_state.committed_filters = {"sub_market": [], "category": [], "mrpsku": []}
-                st.rerun()
+            st.session_state.committed_filters["mrpsku"] = ui_sku
+        # with c4:
+        #     if st.button("🚀 确认", width='stretch', type="primary"):
+        #         st.session_state.committed_filters = {"sub_market": ui_market, "category": ui_category,
+        #                                               "mrpsku": ui_sku}
+        #         st.rerun()
+        # with c5:
+        #     if st.button("重置", width='stretch'):
+        #         st.session_state.filter_ver += 1
+        #         st.session_state.committed_filters = {"sub_market": [], "category": [], "mrpsku": []}
+        #         st.rerun()
                 
     if st.session_state.df_stock_turnover is not None:
         filters = st.session_state.committed_filters
@@ -286,6 +295,11 @@ with fixed_container:
         if filters["category"]: df_yuce_kpi = df_yuce_kpi[df_yuce_kpi["品类"].isin(filters["category"])]
         if filters["mrpsku"]: df_yuce_kpi = df_yuce_kpi[df_yuce_kpi["主料mrpsku"].isin(filters["mrpsku"])]
 
+        df_LT前预测偏差 = st.session_state.df_LT前预测偏差.copy()
+        if filters["sub_market"]: df_LT前预测偏差 = df_LT前预测偏差[df_LT前预测偏差["子市场"].isin(filters["sub_market"])]
+        if filters["category"]: df_LT前预测偏差 = df_LT前预测偏差[df_LT前预测偏差["品类"].isin(filters["category"])]
+        if filters["mrpsku"]: df_LT前预测偏差 = df_LT前预测偏差[df_LT前预测偏差["主料mrpsku"].isin(filters["mrpsku"])]
+
         df_ganyu_kpi = st.session_state.df_ganyu.copy()
         if filters["sub_market"]: df_ganyu_kpi = df_ganyu_kpi[df_ganyu_kpi["子市场"].isin(filters["sub_market"])]
         if filters["category"]: df_ganyu_kpi = df_ganyu_kpi[df_ganyu_kpi["品类"].isin(filters["category"])]
@@ -294,9 +308,9 @@ with fixed_container:
         # df_ganyu_bi = st.session_state.df_ganyu_bi.copy()
         
         df_country_turnover = st.session_state.df_country_turnover.copy()
-        if filters["sub_market"]: df_country_turnover = df_country_turnover[df_country_turnover["子市场"].isin(filters["sub_market"])]
-        if filters["category"]: df_country_turnover = df_country_turnover[df_country_turnover["品类"].isin(filters["category"])]
-        if filters["mrpsku"]: df_country_turnover = df_country_turnover[df_country_turnover["主料mrpsku"].isin(filters["mrpsku"])]
+        # if filters["sub_market"]: df_country_turnover = df_country_turnover[df_country_turnover["子市场"].isin(filters["sub_market"])]
+        # if filters["category"]: df_country_turnover = df_country_turnover[df_country_turnover["品类"].isin(filters["category"])]
+        # if filters["mrpsku"]: df_country_turnover = df_country_turnover[df_country_turnover["主料mrpsku"].isin(filters["mrpsku"])]
 
         # 计算历史海外在库在途周转
         df_历史海外周转 = st.session_state.df_历史海外周转.copy()
@@ -304,11 +318,16 @@ with fixed_container:
         if filters["category"]: df_历史海外周转 = df_历史海外周转[df_历史海外周转["品类"].isin(filters["category"])]
         if filters["mrpsku"]: df_历史海外周转 = df_历史海外周转[df_历史海外周转["主料mrpsku"].isin(filters["mrpsku"])]
 
+
         with st.container(border=True):
             st.markdown("**🎯 指标概况**")
             last_dt_history = st.session_state.t0_date.strftime("%Yw%V")
             curr_avg_yuce = df_yuce_kpi[(df_yuce_kpi['周数']==last_dt_history)]['单周预测偏差率'].abs().mean()
             curr_avg_huanbiyuce = df_yuce_kpi[(df_yuce_kpi['周数']==last_dt_history)]['环比预测偏差率'].abs().mean()
+            if len(df_LT前预测偏差[(df_LT前预测偏差['周数']==last_dt_history)]) > 0:
+                curr_avg_ltyuce = df_LT前预测偏差[(df_LT前预测偏差['周数']==last_dt_history)]['实际周销与预测周销的预测偏差率'].abs().mean()
+            else:
+                curr_avg_ltyuce = 0
             # ganyu_intervention_rate = df_ganyu_bi["有干预样本数"].sum() / df_ganyu_bi["总样本数"].sum()
             ganyu_intervention_rate = len(df_ganyu_kpi[(df_ganyu_kpi['周数']==last_dt_history) & (df_ganyu_kpi['是否有干预']=="是")]) / len(df_ganyu_kpi[df_ganyu_kpi['周数']==last_dt_history])
             curr_avg_ganyu = df_ganyu_kpi[(df_ganyu_kpi['周数']==last_dt_history)]['单周干预偏差率'].abs().mean()
@@ -333,7 +352,7 @@ with fixed_container:
                 断货率 = (df_valid['状态'] == '断货').sum() / df_valid.shape[0]
             else:
                 断货率 = 0.0
-            c1, c2, c3, c4,c5,c6,c7,c8,c9 = st.columns(9)
+            c1, c2, c3, c4,c5,c6,c7,c8,c9,c10 = st.columns(10)
             st.markdown(f"""
                 <style>
                 /* 1. 定位整个 Metric 容器，让所有子元素在纵向上居中对齐 */
@@ -383,9 +402,10 @@ with fixed_container:
             c4.metric("国内在库周转", f"{历史国内在库周转:.1f}", delta=f"目标: 60天", delta_color="green",help="(国内期初在库x单价+国内期末在库x单价)/2/(周销x单价/7)")
             c5.metric("预测偏差率", f"{curr_avg_yuce:.0%}",delta="目标: 35%",delta_color="green")
             c6.metric("预测偏差率(环比)", f"{curr_avg_huanbiyuce:.0%}",delta="目标: 5%",delta_color="green")
-            c7.metric("干预SKU占比", f"{ganyu_intervention_rate:.0%}",delta="目标: 15%",delta_color="green")
-            c8.metric("干预偏差率", f"{curr_avg_ganyu:.0%}",delta="目标: 30%",delta_color="green")
-            c9.metric("干预偏差率(环比)", f"{curr_avg_huanbiganyu:.0%}",delta="目标: 5%",delta_color="green")    
+            c7.metric("预测偏差率(LT前)", f"{curr_avg_ltyuce:.0%}",delta="目标: 35%",delta_color="green")
+            c8.metric("干预SKU占比", f"{ganyu_intervention_rate:.0%}",delta="目标: 15%",delta_color="green")
+            c9.metric("干预偏差率", f"{curr_avg_ganyu:.0%}",delta="目标: 30%",delta_color="green")
+            c10.metric("干预偏差率(环比)", f"{curr_avg_huanbiganyu:.0%}",delta="目标: 5%",delta_color="green")    
             
 
 
@@ -948,6 +968,14 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
         outStock_status_list = ["全部状态","断货","非断货"]
         select_stockStatus = st.selectbox("选择SKU的状态", outStock_status_list,key="selectbox_outStock_stock")
         st.session_state.stock_filter_outStockStatus=select_stockStatus
+    # with 在库周转问题筛选:
+    #     stockTurnover_status_list = ["全部","无问题","预测偏差过大","干预偏差过大","发货问题"]
+    #     select_in_stockStatus = st.selectbox("海外在库周转问题", stockTurnover_status_list,key="selectbox_in_stockTurnover")
+    #     st.session_state.stock_filter_stockTurnover_status=select_in_stockStatus
+    # with 在途周转问题筛选:
+    #     wayTurnover_status_list = ["全部","无问题","预测偏差过大","干预偏差过大","发货问题"]
+    #     select_in_wayStatus = st.selectbox("海外在途周转问题", wayTurnover_status_list,key="selectbox_in_wayTurnover")
+    #     st.session_state.stock_filter_wayTurnover_status=select_in_wayStatus
     
     df_filtered = df.copy()
     if selected_market != "全部市场":
@@ -972,6 +1000,10 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
         df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["状态"] != "断货"]
+    # if select_in_stockStatus != "全部":
+    #     df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["在库周转问题定义"] == select_in_stockStatus]
+    # if select_in_wayStatus != "全部":
+    #     df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["在途周转问题定义"] == select_in_wayStatus]
     
     
     # df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["周数"] == select_week]
@@ -1059,96 +1091,136 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
     # 6. 在 Streamlit 中显示
     st.plotly_chart(fig, width='stretch')
 
-    st.markdown("### 海外周转-历史与目标")
-    pie_col1,pie_col2=st.columns([2,3])
-    with pie_col1:
-        fig_周转问题 = make_subplots(
-            rows=1, cols=2, 
-            horizontal_spacing=0.08,
-            subplot_titles=("在库周转问题定义", "在途周转问题定义"),
-            specs=[[{"type": "pie"}, {"type": "pie"}]]
-        )
-        colors_在库周转_map={
-            "无问题":'#bfc9ca',
-            "预测偏差过大":'#85C1E9',
-            "干预偏差过大":'#f8c471',
-            "发货问题":'#82E0AA'
-        }
+    st.markdown("### 海外周转-历史(上周)与目标")
+    # pie_col1,pie_col2=st.columns([2,3])
+    # with pie_col1:
+    #     fig_周转问题 = make_subplots(
+    #         rows=1, cols=2, 
+    #         horizontal_spacing=0.08,
+    #         subplot_titles=("在库周转问题定义", "在途周转问题定义"),
+    #         specs=[[{"type": "pie"}, {"type": "pie"}]]
+    #     )
+    #     colors_在库周转_map={
+    #         "无问题":'#bfc9ca',
+    #         "预测偏差过大":'#85C1E9',
+    #         "干预偏差过大":'#f8c471',
+    #         "发货问题":'#82E0AA'
+    #     }
         
-        colors_在途周转_map={
-            "无问题":'#bfc9ca',
-            "预测偏差过大":'#85C1E9',
-            "干预偏差过大":'#f8c471',
-            "发货问题":'#82E0AA'
-        }
-        fig_周转问题.add_trace(
-            go.Pie(
-                labels=df_历史海外周转_过滤['在库周转问题定义'].unique(),
-                values=df_历史海外周转_过滤['在库周转问题定义'].value_counts(),
-                name="在库周转问题定义",
-                domain=dict(x=[0, 0.45]),
-                marker=dict(colors=[colors_在库周转_map[x] for x in df_历史海外周转_过滤['在库周转问题定义'].unique()]),
-                textinfo="percent+label", 
-                texttemplate="%{value},<br>%{percent:.1%}",
-                textposition='auto',
-                hovertemplate="%{label}: %{value}个<br>占比: %{percent:.1%}<extra></extra>",
-                insidetextfont=dict(size=12, color="black"),
-                legendgroup='group1'
-            ),
-            row=1, col=1
-        )
-        fig_周转问题.add_trace(
-            go.Pie(
-                labels=df_历史海外周转_过滤['在途周转问题定义'].unique(),
-                values=df_历史海外周转_过滤['在途周转问题定义'].value_counts(),
-                name="在途周转问题定义",
-                domain=dict(x=[0.55, 1.0]),
-                marker=dict(colors=[colors_在途周转_map[x] for x in df_历史海外周转_过滤['在途周转问题定义'].unique()]),
-                textinfo="percent+label", 
-                texttemplate="%{value},<br>%{percent:.1%}",
-                textposition='auto',
-                hovertemplate="%{label}: %{value}个<br>占比: %{percent:.1%}<extra></extra>",
-                insidetextfont=dict(size=12, color="black"),
-                legendgroup='group2'
-            ),
-            row=1, col=2
-        )
-        for i, annotation in enumerate(fig_周转问题['layout']['annotations']):
-            annotation['font'] = dict(family="Microsoft YaHei", size=20, color="black")
+    #     colors_在途周转_map={
+    #         "无问题":'#bfc9ca',
+    #         "预测偏差过大":'#85C1E9',
+    #         "干预偏差过大":'#f8c471',
+    #         "发货问题":'#82E0AA'
+    #     }
+    #     fig_周转问题.add_trace(
+    #         go.Pie(
+    #             labels=df_历史海外周转_过滤['在库周转问题定义'].unique(),
+    #             values=df_历史海外周转_过滤['在库周转问题定义'].value_counts(),
+    #             name="在库周转问题定义",
+    #             domain=dict(x=[0, 0.45]),
+    #             marker=dict(colors=[colors_在库周转_map[x] for x in df_历史海外周转_过滤['在库周转问题定义'].unique()]),
+    #             textinfo="percent+label", 
+    #             texttemplate="%{value},<br>%{percent:.1%}",
+    #             textposition='auto',
+    #             hovertemplate="%{label}: %{value}个<br>占比: %{percent:.1%}<extra></extra>",
+    #             insidetextfont=dict(size=12, color="black"),
+    #             legendgroup='group1'
+    #         ),
+    #         row=1, col=1
+    #     )
+    #     fig_周转问题.add_trace(
+    #         go.Pie(
+    #             labels=df_历史海外周转_过滤['在途周转问题定义'].unique(),
+    #             values=df_历史海外周转_过滤['在途周转问题定义'].value_counts(),
+    #             name="在途周转问题定义",
+    #             domain=dict(x=[0.55, 1.0]),
+    #             marker=dict(colors=[colors_在途周转_map[x] for x in df_历史海外周转_过滤['在途周转问题定义'].unique()]),
+    #             textinfo="percent+label", 
+    #             texttemplate="%{value},<br>%{percent:.1%}",
+    #             textposition='auto',
+    #             hovertemplate="%{label}: %{value}个<br>占比: %{percent:.1%}<extra></extra>",
+    #             insidetextfont=dict(size=12, color="black"),
+    #             legendgroup='group2'
+    #         ),
+    #         row=1, col=2
+    #     )
+    #     for i, annotation in enumerate(fig_周转问题['layout']['annotations']):
+    #         annotation['font'] = dict(family="Microsoft YaHei", size=20, color="black")
 
-        fig_周转问题.update_layout(
-            height=400,
-            template="simple_white",
-            hovermode="x unified",
-            margin=dict(t=60, b=50, l=40, r=40),
-            font=dict(family="Microsoft YaHei",size=10),
-            legend_tracegroupgap=50,
-            legend_title=dict(text="图例分组")
-        )
-        st.plotly_chart(fig_周转问题, width='stretch')
+    #     fig_周转问题.update_layout(
+    #         height=400,
+    #         template="simple_white",
+    #         hovermode="x unified",
+    #         margin=dict(t=60, b=50, l=40, r=40),
+    #         font=dict(family="Microsoft YaHei",size=10),
+    #         legend_tracegroupgap=50,
+    #         legend_title=dict(text="图例分组")
+    #     )
+    #     st.plotly_chart(fig_周转问题, width='stretch')
 
-    with pie_col2:
-        st.dataframe(
-            df_历史海外周转_过滤[['周数','子市场','主料mrpsku','品类','状态','历史海外在库周转','历史海外在途周转',"海外在库周转目标","海外在途周转目标",'历史当周周销','仿真当周周销','在库周转问题定义','在途周转问题定义']],
-            column_config={
-                "周数": st.column_config.TextColumn("周数", width=10),
-                "子市场": st.column_config.TextColumn("子市场", width=1),
-                "品类": st.column_config.TextColumn("品类", width=1),
-                "主料mrpsku": st.column_config.TextColumn("MRPSKU", width=50),
-                "状态": st.column_config.TextColumn("状态", width=2),
-                "历史当周周销": st.column_config.NumberColumn("真实周销", format="%d", width=10, alignment="center"),
-                "仿真当周周销": st.column_config.NumberColumn("仿真周销", format="%d", width=10, alignment="center"),
-                "历史海外在库周转": st.column_config.NumberColumn("真实海外在库周转", format="%d", width=20, alignment="center"),
-                "历史海外在途周转": st.column_config.NumberColumn("真实海外在途周转", format="%d", width=20, alignment="center"),
-                "海外在库周转目标": st.column_config.NumberColumn("海外在库周转目标", format="%d", width=10, alignment="center"),
-                "海外在途周转目标": st.column_config.NumberColumn("海外在途周转目标", format="%d", width=10, alignment="center"),
-                "在库周转问题定义": st.column_config.TextColumn("在库周转问题定义", width=50),
-                "在途周转问题定义": st.column_config.TextColumn("在途周转问题定义", width=50),
-            },
-            hide_index=True,
-            width="stretch",
-            height=500
+    # with pie_col2:
+    # 添加筛选框
+    在库周转问题筛选,在途周转问题筛选,下载文件按钮=st.columns([2,2,2])
+    with 在库周转问题筛选:
+        stockTurnover_status_list = ["全部","无问题","预测偏差过大","干预偏差过大","发货问题"]
+        select_in_stockStatus = st.selectbox("海外在库周转问题", stockTurnover_status_list)
+        # st.session_state.stock_filter_stockTurnover_status=select_in_stockStatus
+    with 在途周转问题筛选:
+        wayTurnover_status_list = ["全部","无问题","预测偏差过大","干预偏差过大","发货问题"]
+        select_in_wayStatus = st.selectbox("海外在途周转问题", wayTurnover_status_list)
+        # st.session_state.stock_filter_wayTurnover_status=select_in_wayStatus
+    
+    if select_in_stockStatus != "全部":
+        df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["在库周转问题定义"] == select_in_stockStatus]
+    if select_in_wayStatus != "全部":
+        df_历史海外周转_过滤 = df_历史海外周转_过滤[df_历史海外周转_过滤["在途周转问题定义"] == select_in_wayStatus]
+
+    with 下载文件按钮:
+        st.write(" ")
+        st.write(" ")
+        def to_excel(df):
+            output = io.BytesIO()
+            # 使用 xlsxwriter 作为引擎
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Sheet1')
+                # 如果需要对 Excel 进行样式处理，可以在这里操作 writer
+            
+            processed_data = output.getvalue()
+            return processed_data
+        
+        excel_data = to_excel(df_历史海外周转_过滤)
+        st.download_button(
+            label="📥下载 上周海外周转数据",
+            data=excel_data,
+            file_name=f'上周海外周转数据_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
+
+    
+    
+
+    st.dataframe(
+        df_历史海外周转_过滤[['周数','子市场','主料mrpsku','品类','状态','历史海外在库周转','历史海外在途周转',"海外在库周转目标","海外在途周转目标",'历史当周周销','仿真当周周销','在库周转问题定义','在途周转问题定义']],
+        column_config={
+            "周数": st.column_config.TextColumn("周数", width=10),
+            "子市场": st.column_config.TextColumn("子市场", width=1),
+            "品类": st.column_config.TextColumn("品类", width=1),
+            "主料mrpsku": st.column_config.TextColumn("MRPSKU", width=50),
+            "状态": st.column_config.TextColumn("状态", width=2),
+            "历史当周周销": st.column_config.NumberColumn("真实周销", format="%d", width=10, alignment="center"),
+            "仿真当周周销": st.column_config.NumberColumn("仿真周销", format="%d", width=10, alignment="center"),
+            "历史海外在库周转": st.column_config.NumberColumn("真实海外在库周转", format="%d", width=20, alignment="center"),
+            "历史海外在途周转": st.column_config.NumberColumn("真实海外在途周转", format="%d", width=20, alignment="center"),
+            "海外在库周转目标": st.column_config.NumberColumn("海外在库周转目标", format="%d", width=10, alignment="center"),
+            "海外在途周转目标": st.column_config.NumberColumn("海外在途周转目标", format="%d", width=10, alignment="center"),
+            "在库周转问题定义": st.column_config.TextColumn("在库周转问题定义", width=50),
+            "在途周转问题定义": st.column_config.TextColumn("在途周转问题定义", width=50),
+        },
+        hide_index=True,
+        width="stretch",
+        height=500
+    )
 
 
 
@@ -1235,7 +1307,7 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
     )
     st.plotly_chart(fig, width='stretch')
 
-    stock_col1,stock_col2 = st.columns([1,2])
+    st.markdown("### 海外在库在途周转区间")
     df_future_single = df_filtered[(df_filtered['周数']<='2026w53')].copy()
     df_future_single['期初在库金额'] = df_future_single['当周期初在库']*df_future_single['单价']
     df_future_single['期末在库金额'] = df_future_single['下周期初在库']*df_future_single['单价']
@@ -1272,8 +1344,43 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
         '[45,60)': '稳定补SS',
         '[60,+inf)': '控制补货'
     })
+    在库下一步动作筛选,在途下一步动作筛选,下一步动作下载按钮 = st.columns(3)
+    with 在库下一步动作筛选:
+        在库下一步动作列表 = ["全部","快速补SS","补SS","稳定补SS","控制补货"]
+        选择在库下一步动作 = st.selectbox("在库动作", 在库下一步动作列表)
+    with 在途下一步动作筛选:
+        在途下一步动作列表 =  ["全部","快速补SS","补SS","稳定补SS","控制补货"]
+        选择在途下一步动作 = st.selectbox("在途动作", 在途下一步动作列表)
+
+    if 选择在库下一步动作 != '全部':
+        df_future_single_oneweek = df_future_single_oneweek[df_future_single_oneweek['在库下一步动作']==选择在库下一步动作]
+    if 选择在途下一步动作 != '全部':
+        df_future_single_oneweek = df_future_single_oneweek[df_future_single_oneweek['在途下一步动作']==选择在途下一步动作]
+
+
+    with 下一步动作下载按钮:
+        st.write(" ")
+        st.write(" ")
+        def to_excel(df):
+            output = io.BytesIO()
+            # 使用 xlsxwriter 作为引擎
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Sheet1')
+                # 如果需要对 Excel 进行样式处理，可以在这里操作 writer
+            
+            processed_data = output.getvalue()
+            return processed_data
+        
+        excel_data = to_excel(df_future_single_oneweek)
+        st.download_button(
+            label="📥下载 海外在库在途下一步动作",
+            data=excel_data,
+            file_name=f'海外在库在途下一步动作_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    stock_col1,stock_col2 = st.columns([1,2])
     with stock_col1:
-        st.markdown("### 海外在库在途周转区间明细")
+        st.markdown("#### SKU个数汇总")
         stock_counts = df_future_single_oneweek['未来海外在库周转区间'].value_counts().sort_index().reset_index()
         stock_counts.columns = ['区间', '数量']
         stock_counts['维度'] = '未来海外在库'
@@ -1307,51 +1414,134 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
             marker_color="gray",
             textfont=dict(size=14,family="Microsoft YaHei", color="black")
         ))
-        for interval in plot_df['区间'].unique():
-            interval_data = plot_df[plot_df['区间'] == interval]
-            for dimension in interval_data['维度'].unique():
-                # 提取该维度、该区间下的单行数据
-                row_data = interval_data[interval_data['维度'] == dimension]
+        # interval_rank = {
+        #     # 在库区间
+        #     "[0,15)": 10,
+        #     "[15,30)": 20,
+        #     "[30,45)": 30,
+        #     "[45,+inf)": 40,
+            
+        #     # 在途区间 (如果名字重复，权重可以设为相同，或者根据业务逻辑微调)
+        #     "[0,30)": 15,
+        #     "[45,60)": 35,
+        #     "[60,+inf)": 45,
+            
+        #     # 总数
+        #     "SKU总数": 0
+        # }
+        # plot_df['rank'] = plot_df['区间'].map(interval_rank)
+        # plot_df = plot_df.sort_values(by=['维度', 'rank'], ascending=[True, True])
+        # for interval in list(dict.fromkeys(plot_df['区间'])):
+        #     interval_data = plot_df[plot_df['区间'] == interval]
+        #     for dimension in list(dict.fromkeys(interval_data['维度'])):
+        #     # for dimension in interval_data['维度'].unique():
+        #         # 提取该维度、该区间下的单行数据
+        #         row_data = interval_data[interval_data['维度'] == dimension]
                 
-                # 根据维度决定 offsetgroup 和颜色
-                if dimension == '未来海外在库':
-                    current_offsetgroup = 1
-                    current_color = stock_color_map.get(interval)
-                else:  # 未来海外在途
-                    current_offsetgroup = 2
-                    current_color = onway_color_map.get(interval)
+        #         # 根据维度决定 offsetgroup 和颜色
+        #         if dimension == '未来海外在库':
+        #             current_offsetgroup = 1
+        #             current_color = stock_color_map.get(interval)
+        #         else:  # 未来海外在途
+        #             current_offsetgroup = 2
+        #             current_color = onway_color_map.get(interval)
                     
-                fig_turnover.add_trace(go.Bar(
-                    x=[dimension],  # X轴直接设为维度名称，配合 offsetgroup 会自动并排
-                    y=row_data['数量'],
-                    name=f"{dimension}-{interval}",
-                    marker_color=current_color,
-                    text=row_data['数量'],
-                    textposition='outside',
-                    offsetgroup=current_offsetgroup,  # 核心：在库用1，在途用2，实现分维度堆叠
-                    hovertemplate=f"维度: {dimension}<br>区间: {interval}<br>数量: %{{y}}<extra></extra>",
-                    hoverlabel=dict(
-                        font_size=12,
-                        font_family="Microsoft YaHei",
-                        font_color="black",
-                        bgcolor="white"
-                    ),
-                    textfont=dict(size=12,family="Microsoft YaHei", color="black"),
-                    legendgroup='group1' if dimension == '未来海外在库' else 'group2'
-                ))
+        #         fig_turnover.add_trace(go.Bar(
+        #             x=[dimension],  # X轴直接设为维度名称，配合 offsetgroup 会自动并排
+        #             y=row_data['数量'],
+        #             name=f"{dimension}-{interval}",
+        #             marker_color=current_color,
+        #             text=row_data['数量'],
+        #             textposition='outside',
+        #             offsetgroup=current_offsetgroup,  # 核心：在库用1，在途用2，实现分维度堆叠
+        #             hovertemplate=f"维度: {dimension}<br>区间: {interval}<br>数量: %{{y}}<extra></extra>",
+        #             hoverlabel=dict(
+        #                 font_size=12,
+        #                 font_family="Microsoft YaHei",
+        #                 font_color="black",
+        #                 bgcolor="white"
+        #             ),
+        #             textfont=dict(size=12,family="Microsoft YaHei", color="black"),
+        #             legendgroup='group1' if dimension == '未来海外在库' else 'group2'
+        #         ))
                 
+        # fig_turnover.update_layout(
+        #     barmode='stack',
+        #     xaxis_title="",
+        #     yaxis_title="SKU数量",
+        #     legend_title="周转区间",
+        #     height=500,
+        #     legend_tracegroupgap=40,
+        #     # legend=dict(
+        #     #     orientation="h",      # 水平排列
+        #     #     yanchor="top",        # 图例框的顶部固定在 y 坐标
+        #     #     y=-0.2,               # y 为负数表示在图表区域下方 (0是底部, 1是顶部)
+        #     #     xanchor="center",     # 图例框的中心固定在 x 坐标
+        #     #     x=0.5,                # 0.5 表示正中间
+        #     #     traceorder="normal",
+        #     #     title_text="",        # 水平排列时，标题可能会让布局变乱，建议设为空或放在前面
+        #     # ),
+        # )
+        dimensions_order = ['SKU总数', '未来海外在库', '未来海外在途']
+        interval_rank = {
+            "SKU总数": 0,
+            "[0,15)": 10, "[15,30)": 20, "[30,45)": 30, "[45,+inf)": 40, # 在库
+            "[0,30)": 11, "[30,45)": 21, "[45,60)": 31, "[60,+inf)": 41  # 在途 (微调权重确保排序)
+        }
+        plot_df['rank'] = plot_df['区间'].map(interval_rank)
+        plot_df = plot_df.sort_values(by=['维度', 'rank'], ascending=True)
+        for dim in dimensions_order:
+            dim_data = plot_df[plot_df['维度'] == dim]
+            
+            # 5. 再循环该维度下的 区间
+            for _, row in dim_data.iterrows():
+                interval = row['区间']
+                
+                # 颜色设置逻辑
+                if dim == '未来海外在库':
+                    current_color = stock_color_map.get(interval)
+                    current_offsetgroup = 1
+                elif dim == '未来海外在途':
+                    current_color = onway_color_map.get(interval)
+                    current_offsetgroup = 2
+                else: # SKU总数
+                    current_color = 'gray'
+                    current_offsetgroup = 0
+                
+
+                fig_turnover.add_trace(go.Bar(
+                    x=[dim], 
+                    y=[row['数量']],
+                    width=0.4,
+                    name=f"{dim}-{interval}", # 图例只显示区间名，不加维度前缀更整洁
+                    marker_color=current_color,
+                    text=[row['数量']] if row['数量'] > 0 else [""], # 0值不显示文字
+                    textposition='outside', # 堆叠图建议文字在内部，总量在外部（见下文）
+                    # offsetgroup=current_offsetgroup,
+                    offsetgroup="identical",  
+                    # alignmentgroup="identical", 
+                    legendgroup=dim,       # 按维度分组图例
+                    hovertemplate=f"维度: {dim}<br>区间: {interval}<br>数量: %{{y}}<extra></extra>",
+                    textfont=dict(size=14,family="Microsoft YaHei", color="black"),
+                ))
+
+        # 6. 配置布局
         fig_turnover.update_layout(
             barmode='stack',
-            xaxis_title="",
-            yaxis_title="SKU数量",
-            legend_title="周转区间",
-            height=500,
+            xaxis=dict(categoryorder='array', categoryarray=dimensions_order,color='gray'),
+            legend=dict(
+                orientation="h",
+                traceorder="normal",
+                groupclick="toggleitem" 
+            ),
             legend_tracegroupgap=40,
+            legend_title="周转区间",
+            margin=dict(t=15),
         )
-        
         st.plotly_chart(fig_turnover, width='stretch',height=500)
+
     with stock_col2:
-        st.markdown("### 海外在库在途周转SKU明细")
+        st.markdown("#### SKU明细")
         st.dataframe(
             df_future_single_oneweek[['子市场','品类','主料mrpsku','未来海外在库周转','未来海外在途周转','未来海外在库周转区间','未来海外在途周转区间','在库下一步动作','在途下一步动作']],
             column_config={
@@ -1654,16 +1844,6 @@ def predictSales_rate_area(df_yuce, curr_filters):
         "主料mrpsku": "nunique" 
     }).reset_index()
     df_cat.columns = ["品类", "单周预测偏差率", "环比预测偏差率", "SKU个数"]
-    # 策略：只给 [偏差率 > 30%] 且 [SKU数量在前 10%] 的重点品类打标签
-    sku_threshold = df_cat["SKU个数"].quantile(0.9)
-    def get_label(row):
-        if (abs(row["单周预测偏差率"]) > 0.27 or abs(row["环比预测偏差率"]) > 0.3) and row["SKU个数"] >= sku_threshold:
-            return row["品类"]
-        # if abs(row["单周预测偏差率"]) > 1.0:
-        #     return row["品类"]
-        return ""
-
-    df_cat["显示标签"] = df_cat.apply(get_label, axis=1)
     def get_color(row):
         if row["单周预测偏差率"] > 0.27:
             return "预测过高"
@@ -1676,11 +1856,28 @@ def predictSales_rate_area(df_yuce, curr_filters):
     df_cat['单周预测偏差率'] = round(df_cat['单周预测偏差率']*100, 1)
     df_cat['环比预测偏差率'] = round(df_cat['环比预测偏差率']*100, 1)
     with detail_cat:
-        st.markdown(
+        markdown_text,download_button = st.columns([4,2])
+        markdown_text.markdown(
             f"""
             #### 预测情况下钻-<span style='color: #ff4b4b;'>{st.session_state.yuce_filter_market}</span> 品类明细表
             """, 
             unsafe_allow_html=True
+        )
+        def to_excel(df):
+            output = io.BytesIO()
+            # 使用 xlsxwriter 作为引擎
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Sheet1')
+                # 如果需要对 Excel 进行样式处理，可以在这里操作 writer
+            
+            processed_data = output.getvalue()
+            return processed_data
+        excel_data = to_excel(df_cat)
+        download_button.download_button(
+            label="📥下载 筛选后品类明细表",
+            data=excel_data,
+            file_name=f'品类明细表_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
         def color_deviation(val,target):
@@ -1722,16 +1919,35 @@ def predictSales_rate_area(df_yuce, curr_filters):
         },
          width="stretch", height=300, hide_index=True)
     with detail_sku:
-        st.markdown(
+        markdown_text,download_button = st.columns([3,1])
+        df_detail = df_filtered[df_filtered["周数"] == select_week][['周数','子市场', "channel_name",'品类', "主料mrpsku","状态", "当周实际值", "当周预测值" ,"单周预测偏差率", "环比预测偏差率"]].copy()
+        df_detail=df_detail.sort_values("单周预测偏差率", ascending=False)
+        df_detail['单周预测偏差率'] = round(df_detail['单周预测偏差率']*100, 1)
+        df_detail['环比预测偏差率'] = round(df_detail['环比预测偏差率']*100, 1)
+
+        markdown_text.markdown(
             f"""
             #### 预测情况下钻-<span style='color: #ff4b4b;'>{st.session_state.yuce_filter_market}_{st.session_state.yuce_filter_category}</span> MRPSKU明细表
             """, 
             unsafe_allow_html=True
         )
-        df_detail = df_filtered[df_filtered["周数"] == select_week][['周数','子市场', "channel_name",'品类', "主料mrpsku","状态", "当周实际值", "当周预测值" ,"单周预测偏差率", "环比预测偏差率"]].copy()
-        df_detail=df_detail.sort_values("单周预测偏差率", ascending=False)
-        df_detail['单周预测偏差率'] = round(df_detail['单周预测偏差率']*100, 1)
-        df_detail['环比预测偏差率'] = round(df_detail['环比预测偏差率']*100, 1)
+        def to_excel(df):
+            output = io.BytesIO()
+            # 使用 xlsxwriter 作为引擎
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Sheet1')
+                # 如果需要对 Excel 进行样式处理，可以在这里操作 writer
+            
+            processed_data = output.getvalue()
+            return processed_data
+        excel_data = to_excel(df_detail)
+        download_button.download_button(
+            label="📥下载 筛选后MRPSKU明细表",
+            data=excel_data,
+            file_name=f'MRPSKU明细表_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
         def color_deviation(val,target):
             color = '#cf1322' if abs(val) > target else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > target else f'color: {color}'
@@ -1975,7 +2191,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
             outsidetextfont=dict(size=14, color="black")
         ), row=1, col=2)
 
-        top_y1 = max(v_total) + 200
+        top_y1 = max(v_total) + 100
         for i, row in df_inter.iterrows():
             start_y = max(row["有干预样本数"], row["有效干预数"])  
             fig.add_shape(
@@ -2020,7 +2236,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
         )
 
         # 优化坐标轴
-        fig.update_yaxes(title_text="样本数量", row=1, col=2)
+        fig.update_yaxes(title_text="样本数量", row=1, col=2,range=[0, 900])
         fig.update_xaxes(tickangle=0, row=1, col=2)
 
         st.plotly_chart(fig, width='stretch')
@@ -2096,7 +2312,6 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
         )
         max_y1 = df_filtered_week_agg["单周干预偏差率"].max().round(1)
         max_y2 = df_filtered_week_agg["环比干预偏差率"].max().round(1)
-        st.write(max_y1,max_y2)
         fig_历史干预曲线.update_layout(
             # 左侧 Y 轴配置
             yaxis=dict(
@@ -2239,7 +2454,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
         fig.update_yaxes(showticklabels=False, row=1, col=2)
         fig.update_yaxes(tickfont=dict(size=13), row=1, col=1)
 
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, width='stretch',height=500)
     
     detail_cat,detail_sku_ganyu = st.columns([2,3])
     df_cat = df_filtered[df_filtered["周数"] == select_week].groupby("品类").agg({
@@ -2267,7 +2482,8 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
     df_cat['单周干预偏差率'] = round(df_cat['单周干预偏差率']*100, 1)
     df_cat['环比干预偏差率'] = round(df_cat['环比干预偏差率']*100, 1)
     with detail_cat:
-        st.markdown(
+        markdown_text,download_button = st.columns([3,1])
+        markdown_text.markdown(
             f"""
             #### 干预情况下钻-<span style='color: #ff4b4b;'>{st.session_state.ganyu_filter_market}</span> 品类明细表
             """, 
@@ -2277,6 +2493,22 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
             color = '#cf1322' if abs(val) > target else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > target else f'color: {color}'
         df_cat['周数']=select_week
+        def to_excel(df):
+            output = io.BytesIO()
+            # 使用 xlsxwriter 作为引擎
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Sheet1')
+                # 如果需要对 Excel 进行样式处理，可以在这里操作 writer
+            
+            processed_data = output.getvalue()
+            return processed_data
+        excel_data = to_excel(df_cat)
+        download_button.download_button(
+            label="📥下载 筛选后品类明细表",
+            data=excel_data,
+            file_name=f'品类干预明细表_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
         styled_df = df_cat[['周数','品类', '单周干预偏差率', '环比干预偏差率', 'SKU个数', '偏差情况']].sort_values("单周干预偏差率", ascending=False).style.map(
             color_deviation, subset=['单周干预偏差率'], target=30
         )
@@ -2308,20 +2540,46 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
          width="stretch", height=400, hide_index=True)
     
     with detail_sku_ganyu:
-        st.markdown(
+        markdown_text,select_shifouganyu,download_button = st.columns([3,1,1])
+        markdown_text.markdown(
             f"""
             #### 干预情况下钻-<span style='color: #ff4b4b;'>{st.session_state.ganyu_filter_market}_{st.session_state.ganyu_filter_category}</span> MRPSKU明细表
             """, 
             unsafe_allow_html=True
         )
-        inter_list = ["全部"] + sorted(df_filtered[df_filtered["是否有干预"] == "是"]["是否应该干预"].unique().tolist())
-        selected_inter = st.selectbox("是否应该干预", inter_list,key="selectbox_inter")
+        
+        inter_list = ["全部"] + sorted(df_filtered_yes["是否应该干预"].unique().tolist())
+        with select_shifouganyu:
+            selected_inter = st.selectbox("是否应该干预", inter_list,key="selectbox_inter")
+
+        df_filtered_shifouganyu = df_filtered_yes.copy()
         if selected_inter != "全部":
-            df_filtered_yes = df_filtered_yes[df_filtered_yes["是否应该干预"] == selected_inter]
-        df_detail = df_filtered_yes[df_filtered_yes["周数"] == select_week][['周数','子市场', "channel_name",'品类', "主料mrpsku","状态", "当周实际值", "当周干预值", "单周干预偏差率", "环比干预偏差率", "是否应该干预"]].copy()
+            df_filtered_shifouganyu = df_filtered_yes[df_filtered_yes["是否应该干预"] == selected_inter]
+        
+        df_detail = df_filtered_shifouganyu[df_filtered_shifouganyu["周数"] == select_week][['周数','子市场', "channel_name",'品类', "主料mrpsku","状态", "当周实际值", "当周干预值", "单周干预偏差率", "环比干预偏差率", "是否应该干预"]].copy()
         df_detail['单周干预偏差率'] = round(df_detail['单周干预偏差率']*100, 1)
         df_detail['环比干预偏差率'] = round(df_detail['环比干预偏差率']*100, 1)
-        
+        with download_button:
+            st.write(" ")
+            st.write(" ")
+            def to_excel(df):
+                output = io.BytesIO()
+                # 使用 xlsxwriter 作为引擎
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Sheet1')
+                    # 如果需要对 Excel 进行样式处理，可以在这里操作 writer
+                
+                processed_data = output.getvalue()
+                return processed_data
+            excel_data = to_excel(df_detail)
+            download_button.download_button(
+                label="📥下载 筛选后MRPSKU明细表",
+                data=excel_data,
+                file_name=f'MRPSKU干预明细表_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+
+
         def color_deviation(val,target):
             color = '#cf1322' if abs(val) > target else '#389e0d'
             return f'color: {color}; font-weight: bold' if abs(val) > target else f'color: {color}'
@@ -2360,13 +2618,14 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
             },
             hide_index=True,
             width="stretch",
-            height=300
+            height=380
         )
 
 
-def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
+def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_filters):
     df = apply_filters(df_fahuo, curr_filters)
     df_历史海外周转 = apply_filters(df_历史海外周转, curr_filters)
+    df_断货无在途 = apply_filters(df_断货无在途, curr_filters)
     if df is None or df.empty: return
 
 
@@ -2425,6 +2684,14 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
         df_周转_filtered = df_周转_filtered[df_周转_filtered["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_周转_filtered = df_周转_filtered[df_周转_filtered["状态"] != "断货"]
+
+    df_断货无在途_filtered = df_断货无在途.copy()
+    if selected_market != "全部市场":
+        df_断货无在途_filtered = df_断货无在途_filtered[df_断货无在途_filtered["子市场"] == selected_market]
+    if selected_category != "全部品类":
+        df_断货无在途_filtered = df_断货无在途_filtered[df_断货无在途_filtered["品类"] == selected_category]
+    if selected_sku != "全部SKU":
+        df_断货无在途_filtered = df_断货无在途_filtered[df_断货无在途_filtered["主料mrpsku"] == selected_sku]
 
 
 
@@ -2531,7 +2798,8 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
 
         df_周转_指标['海外周转天数'] = df_周转_指标[['海外在库周转', '海外在途周转']].sum(axis=1)
         df_周转_指标[['海外在库周转', '海外在途周转', '海外周转天数']] = df_周转_指标[['海外在库周转', '海外在途周转', '海外周转天数']].round(1)
-        result_df = pd.merge(df_达成率, df_周转_指标, on=['子市场', '周数'], how='outer')
+
+        result_df = pd.merge(df_周转_指标,df_达成率, on=['子市场', '周数'], how='outer')
         result_df=result_df.fillna(0)
         result_df['子市场总SKU'] = result_df.groupby('子市场')['SKU数量'].transform('sum')
         result_df = result_df.sort_values(
@@ -2539,6 +2807,8 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
             ascending=[False, True, False]
         )
         result_df = result_df.drop(columns=['子市场总SKU'])
+        # 删除海外周转天数列值为0的行
+        result_df = result_df[result_df['海外周转天数'] != 0]
         result_df['周数new'] = result_df["周数"].str[2:]
         fig_子市场发货 = make_subplots(
             rows=2, cols=1, 
@@ -2549,16 +2819,34 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
         )
 
         result_df['周数new'] = result_df["周数"].str[2:]
-
-        # ==================== 下方：柱状图保持不变 ====================
+        # 不同子市场添加目标天数
+        result_df['目标天数'] = np.where(
+            result_df['子市场'] == 'DE',
+            129,
+            np.where(
+                result_df['子市场'] == 'APM',
+                135,
+                np.where(
+                    result_df['子市场'] == 'AP-CA',
+                    135,
+                    105
+                )
+            )
+        )
+        result_df['目标天数'] = result_df['目标天数'].round(0)
+        result_df['子市场_new'] = (
+            result_df['子市场'] + '<br>' +
+            '(' + result_df['目标天数'].astype(str) + '天)'
+        )
+       
         fig_子市场发货.add_trace(
             go.Bar(
-                x=[result_df['子市场'], result_df['周数new']], 
+                x=[result_df['子市场_new'], result_df['周数new']], 
                 y=result_df['海外在库周转'],
                 name="海外在库周转",
                 marker_color='#85C1E9',
                 text=[f"{v:.0f}" for v in result_df['海外在库周转']],
-                textposition='outside',
+                textposition='inside',
                 textfont=dict(size=11, color="black"),
                 cliponaxis=False,
                 showlegend=True,
@@ -2578,12 +2866,12 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
         )
         fig_子市场发货.add_trace(
             go.Bar(
-                x=[result_df['子市场'], result_df['周数new']], 
+                x=[result_df['子市场_new'], result_df['周数new']], 
                 y=result_df['海外在途周转'],
                 name="海外在途周转",
                 marker_color='#f8c471',
                 text=[f"{v:.0f}" for v in result_df['海外在途周转']],
-                textposition='outside',
+                textposition='inside',
                 textfont=dict(size=11, color="black"),
                 cliponaxis=False,
                 showlegend=True,
@@ -2601,24 +2889,64 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
             ),
             row=2, col=1, secondary_y=False,
         )
-
-        
         fig_子市场发货.add_trace(
             go.Scatter(
-                x=[result_df['子市场'], result_df['周数new']],
-                y=result_df['配货达成率'],
-                mode='lines+markers+text',
-                line=dict(color='#2E86C1', width=2, shape='linear'), # 建议改用 linear，多周期大跨度时比 spline 更不易失真
-                marker=dict(color='#2E86C1', size=6),
-                text=[f"{v*100:.0f}%" if v==v else "" for v in result_df['配货达成率']], # 过滤掉NaN值
-                textposition="top center",
-                textfont=dict(size=13, color='#2E86C1'),
-                showlegend=True,
-                name="配货达成率",
-                hoverinfo='skip',
+                x=[result_df['子市场_new'], result_df['周数new']],
+                y=result_df['海外周转天数'],
+                mode='text',
+                text=[f"{v:.0f}" for v in result_df['海外周转天数']],
+                textposition='top center',
+                textfont=dict(
+                    size=14,
+                    color='#0461AB'
+                ),
+                showlegend=False,
+                hoverinfo='skip'
             ),
-            row=1, col=1
+            row=2, col=1, secondary_y=False
         )
+
+        
+        # fig_子市场发货.add_trace(
+        #     go.Scatter(
+        #         x=[result_df['子市场_new'], result_df['周数new']],
+        #         y=result_df['配货达成率'],
+        #         mode='lines+markers+text',
+        #         line=dict(color='#2E86C1', width=2, shape='linear'), # 建议改用 linear，多周期大跨度时比 spline 更不易失真
+        #         marker=dict(color='#2E86C1', size=6),
+        #         text=[f"{v*100:.0f}%" if v==v else "" for v in result_df['配货达成率']], # 过滤掉NaN值
+        #         textposition="top center",
+        #         textfont=dict(size=13, color='#2E86C1'),
+        #         showlegend=True,
+        #         name="配货达成率",
+        #         hoverinfo='skip',
+        #     ),
+        #     row=1, col=1
+        # )
+        line_color = '#2E86C1'
+        first_market = True # 用于控制图例只显示一次
+        for market in result_df['子市场_new'].unique():
+            df_sub = result_df[result_df['子市场_new'] == market]
+            fig_子市场发货.add_trace(
+                go.Scatter(
+                    x=[df_sub['子市场_new'], df_sub['周数new']], 
+                    y=df_sub['配货达成率'],
+                    mode='lines+markers+text',
+                    line=dict(color=line_color, width=2, shape='linear'),
+                    marker=dict(color=line_color, size=6),
+                    # 文本标签处理
+                    text=[f"{v*100:.0f}%" if v==v else "" for v in df_sub['配货达成率']],
+                    textposition="top center",
+                    textfont=dict(size=13, color=line_color),
+                    name="配货达成率",
+                    legendgroup="配货达成率",      # 将所有子市场的线归为一组
+                    showlegend=first_market,     # 只有第一次循环时显示图例
+                    hoverinfo='skip',
+                ),
+                row=1, col=1
+            )
+            first_market = False
+
 
         top_y1 = (result_df['海外在库周转'].fillna(0) + result_df['海外在途周转'].fillna(0)).max() * 1.1
         # top_y1 = 430
@@ -2631,7 +2959,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
                 return "green"
         fig_子市场发货.add_trace(
             go.Scatter(
-                x=[result_df['子市场'], result_df['周数new']],
+                x=[result_df['子市场_new'], result_df['周数new']],
                 y=y_constant_list,
                 mode="lines+markers+text",  
                 line=dict(
@@ -2688,24 +3016,6 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
                 )
             )
         
-        shapes.append(
-            dict(
-                type="line",
-                xref="x2 domain", # 对应下方子图的横向全宽
-                yref="y2",        # 对应下方子图的 Y 轴数值
-                x0=0,
-                x1=1,
-                y0=105,
-                y1=105,
-                line=dict(
-                    color="#CC0033",  #深红色
-                    width=1.5,             
-                    dash="dash"
-                ),
-                layer="above",
-                opacity=0.9
-            )
-        )
 
         # ==================== 样式与坐标轴更新 ====================
         fig_子市场发货.update_layout(
@@ -2737,18 +3047,18 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
             row=2, col=1,
             tickfont=dict(size=12, color="black")
         )
-        fig_子市场发货.add_annotation(
-            xref="x2 domain",
-            yref="y2",
-            x=0.99,            # 靠近右侧 (0.99 留一点点边距)
-            y=105,             # 对应 Y 轴 105 的位置
-            text="海外周转天数: 105",
-            showarrow=False,   # 不显示箭头
-            xanchor="right",   # 文字右对齐
-            yanchor="top",     # 文字在坐标下方 (对应之前的 bottom right)
-            font=dict(size=12, color="black"),
-            opacity=0.8
-        )
+        # fig_子市场发货.add_annotation(
+        #     xref="x2 domain",
+        #     yref="y2",
+        #     x=0.99,            # 靠近右侧 (0.99 留一点点边距)
+        #     y=105,             # 对应 Y 轴 105 的位置
+        #     text="海外周转天数: 105",
+        #     showarrow=False,   # 不显示箭头
+        #     xanchor="right",   # 文字右对齐
+        #     yanchor="top",     # 文字在坐标下方 (对应之前的 bottom right)
+        #     font=dict(size=12, color="black"),
+        #     opacity=0.8
+        # )
 
         st.plotly_chart(fig_子市场发货, width='stretch')
 
@@ -2767,26 +3077,18 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
     total_skus = len(df_filtered_oneweek)
     problem_skus = len(df_filtered_oneweek[df_filtered_oneweek['实际出库量'] < df_filtered_oneweek['计划发货量']])
     # 用小组件显示概况
-    m1, m2, m3 = st.columns(3)
+    m1, m2, m3,m4,m5 = st.columns(5)
     m1.metric("SKU 总数", total_skus)
     m2.metric("异常 SKU 数", problem_skus)
-    m3.write("💡 *异常定义：实际出库量 < 计划发货量*")
+    with m3:
+        st.write(" ")
+        st.write("💡 *异常定义：实际出库量 < 计划发货量*")
     display_cols = [
         "子市场","主料mrpsku", "品类", "运输方式","计划发货量", "配货数量", "配货达成率","历史海外在库周转","历史海外在途周转","排单数量",  "实际出库量", "计划未达成原因"
     ]
     df_filtered_oneweek['缺口'] = df_filtered_oneweek['计划发货量'] - df_filtered_oneweek['实际出库量']
     df_filtered_oneweek['配货达成率'] = df_filtered_oneweek['配货达成率']*100
     df_filtered_sorted = df_filtered_oneweek.sort_values("缺口", ascending=False)
-
-    # 计算市场品类断货率
-
-    # result_cat_df = df_周转_filtered_oneweek.groupby(
-    #     ["子市场","品类"],
-    #     as_index=False
-    # ).agg(
-    #     断货率=('状态', lambda x: (x == '断货').mean())
-    # )
-
     exclude_mask = (
         (df_周转_filtered_oneweek['状态'] == '清仓') | 
         (df_周转_filtered_oneweek['状态'] == '新品FBM') | 
@@ -2805,6 +3107,30 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
     df_filtered_sorted_merge=df_filtered_sorted_merge[[
         "子市场","主料mrpsku", "品类","状态", "运输方式","计划发货量", "配货数量", "配货达成率","历史海外在库周转","历史海外在途周转","断货率","排单数量",  "实际出库量", "计划未达成原因"
     ]]
+
+    with m4:
+        reason_list = ['全部']+df_filtered_sorted_merge['计划未达成原因'].unique().tolist()
+        selected_reason = st.selectbox("请选择计划未达成原因", reason_list)
+        if selected_reason != '全部':
+            df_filtered_sorted_merge = df_filtered_sorted_merge[df_filtered_sorted_merge['计划未达成原因'] == selected_reason]
+    
+    with m5:
+        st.write(" ")
+        st.write(" ")
+        def to_excel(df):
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Sheet1')
+            processed_data = output.getvalue()
+            return processed_data
+        st.download_button(
+            label="📥下载 发货指标下钻SKU明细",
+            data=to_excel(df_filtered_sorted_merge),
+            file_name=f"发货指标下钻SKU明细_{time.strftime('%Y-%m-%d')}.xlsx",
+            mime="application/vnd.ms-excel",
+            key="download_excel"
+        )
+    
     def color_deviation1(val,target):
         color = '#389e0d' if abs(val) > target else '#cf1322'
         return f'color: {color}' if abs(val) > target else f'color: {color}; font-weight: bold'
@@ -2838,10 +3164,54 @@ def delivery_stock_area(df_fahuo,df_历史海外周转, curr_filters):
         },
         hide_index=True
     )
+
+    #================= 断货无在途区域 ============================
+    markdown_text,download_button=st.columns([3,1])
+    with markdown_text:
+        st.markdown("### 断货无在途SKU明细")
+    with download_button:
+        st.write(" ")
+        st.write(" ")
+        def to_excel(df):
+            output = io.BytesIO()
+            # 使用 xlsxwriter 作为引擎
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Sheet1')
+                # 如果需要对 Excel 进行样式处理，可以在这里操作 writer
+            
+            processed_data = output.getvalue()
+            return processed_data
+        excel_data = to_excel(df_断货无在途_filtered)
+        st.download_button(
+            label="📥下载 断货无在途 数据",
+            data=excel_data,
+            file_name=f'断货无在途数据_{time.strftime("%Y-%m-%d", time.localtime())}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    st.dataframe(
+        df_断货无在途_filtered[['子市场','主料mrpsku','层级','品类','二级品类','状态','二级状态','货源地','规格','可用库存','待上架库存','IQC']],
+        width='stretch', 
+        height=500,
+        column_config={
+            "子市场": st.column_config.TextColumn("子市场", width=0.5),
+            "主料mrpsku": st.column_config.TextColumn("主料mrpsku", width=5),
+            "层级": st.column_config.TextColumn("层级", width=0.5),
+            "品类": st.column_config.TextColumn("品类", width=0.5),
+            "二级品类": st.column_config.TextColumn("二级品类", width=0.5),
+            "状态": st.column_config.TextColumn("状态", width=0.5),
+            "二级状态": st.column_config.TextColumn("二级状态", width=0.5),
+            "货源地": st.column_config.TextColumn("货源地", width=0.5),
+            "规格": st.column_config.TextColumn("规格", width=0.5),
+            "可用库存": st.column_config.NumberColumn("可用库存", format="%d", alignment="center",width=1),
+            "待上架库存": st.column_config.NumberColumn("待上架库存", format="%d", alignment="center",width=1),
+            "IQC": st.column_config.NumberColumn("IQC", format="%d", alignment="center",width=1),
+        }
+    )
+
     
 
 def actual_turnover_area(df_country_turnover,df_历史海外周转,filters):
-    df_country_turnover=apply_filters(df_country_turnover,filters)
+    # df_country_turnover=apply_filters(df_country_turnover,filters)
     df_历史海外周转=apply_filters(df_历史海外周转,filters)
     if df_country_turnover is None or df_country_turnover.empty:
         st.warning("无数据")
@@ -2877,11 +3247,13 @@ def actual_turnover_area(df_country_turnover,df_历史海外周转,filters):
     }).T
 
     result_df = result_df.T.rename_axis(index='周数').reset_index()
+
+    result_df['海外总周转'] = result_df['海外在库周转'] + result_df['海外在途周转']
     fig_历史周转 = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True, 
-        vertical_spacing=0.2, # 上下两个图的间距
-        row_heights=[0.4, 0.6]
+        vertical_spacing=0.1, # 上下两个图的间距
+        row_heights=[0.3, 0.7]
     )
     fig_历史周转.add_trace(go.Bar(
             x=result_df['周数'],
@@ -2955,6 +3327,35 @@ def actual_turnover_area(df_country_turnover,df_历史海外周转,filters):
         row=2,
         col=1
     )
+    fig_历史周转.add_trace(go.Scatter(
+            x=result_df['周数'],
+            y=result_df['海外总周转'],
+            mode='lines+markers+text',
+            name='海外总周转',
+            text=result_df['海外总周转'].apply(lambda x: f"{x:.1f}"),
+            textposition="top center",
+            marker=dict(
+                color='#2E8421',
+                size=12
+            ),
+            textfont=dict(
+                size=15,
+                color="black",
+            )
+        ),
+        row=2,
+        col=1
+    )
+    fig_历史周转.add_hline(
+            y=105,
+            line_dash="dash",  # 设置为虚线
+            line_color="#CC0033",  # 保持颜色一致
+            annotation_text="海外周转目标: 105天",
+            annotation_position="bottom right",  # 文字显示位置
+            opacity=0.7  # 设置透明度，避免抢了主数据的视觉焦点
+    )
+
+
     def get_trend_text_and_color(val):
         if val > 0:
             return f"↗{val:.1f}%", "red"
@@ -3011,14 +3412,15 @@ def actual_turnover_area(df_country_turnover,df_历史海外周转,filters):
             font=dict(size=16, color="black")
         )
     )
-
+    max_y = max(result_df['海外总周转']) + 30
     # --- 坐标轴设置 ---
     fig_历史周转.update_yaxes(
         title_text="周转天数",
         showgrid=True,
         gridcolor='lightgray',
         row=2, col=1,
-        tickfont=dict(size=16, color="black")
+        tickfont=dict(size=16, color="black"),
+        range = [0 , max_y]
     )
 
     fig_历史周转.update_yaxes(
@@ -3059,7 +3461,7 @@ if st.session_state.df_fahuo is not None:
     # 发货指标区域
     st.markdown("# 供")
     st.header("🚚 发货过程指标", anchor="2")
-    delivery_stock_area(st.session_state.df_fahuo,st.session_state.df_历史海外周转, curr_filters)
+    delivery_stock_area(st.session_state.df_fahuo,st.session_state.df_历史海外周转,st.session_state.df_断货无在途, curr_filters)
     st.divider()
     # 预测指标区域
     st.markdown("# 销")
