@@ -441,7 +441,7 @@ with fixed_container:
                 }}
                 </style>
                 """, unsafe_allow_html=True)
-            c1.metric("断货率",f"{断货率:.1%}",delta="目标: 0%",delta_color="green")
+            c1.metric("断货率",f"{断货率:.1%}",delta="目标: 1%",delta_color="green")
             c2.metric("海外在库周转",历史海外在库周转,"目标: P1:45天,P2:30天",delta_color="green",help="(期初在库x单价+期末在库x单价)/2/(周销x单价/7)")
             c3.metric("海外在途周转",历史海外在途周转,"目标: 60天",delta_color="green",help="(期初在途x单价+期末在途x单价)/2/(周销x单价/7)")
             c4.metric("国内在库周转", f"{历史国内在库周转:.1f}", delta=f"目标: 60天", delta_color="green",help="(国内期初在库x单价+国内期末在库x单价)/2/(周销x单价/7)")
@@ -1046,7 +1046,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
                     line=dict(width=5, color='white')
                 ),
                 text=df_filtered_week["单周预测偏差率"].apply(lambda x: f"{x:.0%}"),
-                textposition="top left",
+                textposition="top center",
                 name="单周偏差",
                 textfont=dict(size=14, color="black")
             )
@@ -1063,7 +1063,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
                     line=dict(width=5, color='white')
                 ),
                 text=df_filtered_week["环比预测偏差率"].apply(lambda x: f"{x:.0%}"),
-                textposition="bottom left",
+                textposition="bottom center",
                 name="环比偏差",
                 yaxis="y2",
                 textfont=dict(size=14, color="black")
@@ -1662,7 +1662,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
                     line=dict(width=5, color='white')
                 ),
                 text=df_filtered_week_agg["单周干预偏差率"].apply(lambda x: f"{x:.0%}"),
-                textposition="top left",
+                textposition="top center",
                 name="单周偏差",
                 textfont=dict(size=14, color="black")
             )
@@ -1679,7 +1679,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
                     line=dict(width=5, color='white')
                 ),
                 text=df_filtered_week_agg["环比干预偏差率"].apply(lambda x: f"{x:.0%}"),
-                textposition="bottom left",
+                textposition="bottom center",
                 name="环比偏差",
                 yaxis="y2",
                 textfont=dict(size=14, color="black")
@@ -2327,7 +2327,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
         y_constant_list = [top_y1] * len(result_df)
         # 断货率如何大于0字体就是红色否则是绿色
         def get_trend_text_and_color(val):
-            if val > 0:
+            if val > 0.01:
                 return "red"
             else:
                 return "green"
@@ -2343,11 +2343,11 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
                 ),
                 marker=dict(
                     # color="#66CC99", 
-                    color = ["red" if v > 0 else "green" for v in result_df['断货率']],
+                    color = ["red" if v > 0.01 else "green" for v in result_df['断货率']],
                     size=6, 
                     line=dict(
                         # color="#66CC99",
-                        color = ["red" if v > 0 else "green" for v in result_df['断货率']],
+                        color = ["red" if v > 0.01 else "green" for v in result_df['断货率']],
                         width=2
                     )
                 ),
@@ -2356,7 +2356,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
                 textposition="top center",
                 textfont=dict(
                     # color="#009966", 
-                    color = ["red" if v > 0 else "green" for v in result_df['断货率']],
+                    color = ["red" if v > 0.01 else "green" for v in result_df['断货率']],
 
                     size=14, 
                     family="Microsoft YaHei"
@@ -2444,9 +2444,6 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
     with m3:
         st.write(" ")
         st.write("💡 *异常定义：实际出库量 < 计划发货量*")
-    display_cols = [
-        "子市场","主料mrpsku", "品类", "运输方式","计划发货量", "配货数量", "配货达成率","历史海外在库周转","历史海外在途周转","排单数量",  "实际出库量", "计划未达成原因"
-    ]
     df_filtered_oneweek['缺口'] = df_filtered_oneweek['计划发货量'] - df_filtered_oneweek['实际出库量']
     df_filtered_oneweek['配货达成率'] = df_filtered_oneweek['配货达成率']*100
     df_filtered_sorted = df_filtered_oneweek.sort_values("缺口", ascending=False)
@@ -2491,7 +2488,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
             mime="application/vnd.ms-excel",
             key="download_excel"
         )
-    
+    df_filtered_sorted_merge['断货率'] = df_filtered_sorted_merge['断货率']*100
     def color_deviation1(val,target):
         color = '#389e0d' if abs(val) > target else '#cf1322'
         return f'color: {color}' if abs(val) > target else f'color: {color}; font-weight: bold'
@@ -2501,7 +2498,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
     styled_df = df_filtered_sorted_merge.sort_values("配货达成率", ascending=False).style.map(
         color_deviation1, subset=['配货达成率'],target=90
     )
-    styled_df = styled_df.map(color_deviation2, subset=['断货率'],target=0)
+    styled_df = styled_df.map(color_deviation2, subset=['断货率'],target=1)
     # 6. 展示表格
     st.dataframe(
         styled_df, 
@@ -2529,7 +2526,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
     #================= 断货无在途区域 ============================
     markdown_text,download_button=st.columns([3,1])
     with markdown_text:
-        st.markdown("### 断货无在途SKU明细")
+        st.markdown("### 全量SKU断货无在途明细")
     with download_button:
         st.write(" ")
         st.write(" ")
@@ -2550,7 +2547,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
     st.dataframe(
-        df_断货无在途_filtered[['子市场','主料mrpsku','层级','品类','二级品类','状态','二级状态','货源地','规格','可用库存','待上架库存','IQC']],
+        df_断货无在途_filtered[['子市场','主料mrpsku','层级','品类','二级品类','状态','二级状态','货源地','规格','主料可用库存','替代料可用库存','待上架库存','IQC','是否有尺寸','发货计划量']],
         width='stretch', 
         height=500,
         column_config={
@@ -2563,9 +2560,12 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
             "二级状态": st.column_config.TextColumn("二级状态", width=0.5),
             "货源地": st.column_config.TextColumn("货源地", width=0.5),
             "规格": st.column_config.TextColumn("规格", width=0.5),
-            "可用库存": st.column_config.NumberColumn("可用库存", format="%d", alignment="center",width=1),
+            "主料可用库存": st.column_config.NumberColumn("主料可用库存", format="%d", alignment="center",width=1),
+            "替代料可用库存": st.column_config.NumberColumn("替代料可用库存", format="%d", alignment="center",width=1),
             "待上架库存": st.column_config.NumberColumn("待上架库存", format="%d", alignment="center",width=1),
             "IQC": st.column_config.NumberColumn("IQC", format="%d", alignment="center",width=1),
+            "是否有尺寸": st.column_config.TextColumn("是否有尺寸", width=0.5),
+            "发货计划量": st.column_config.NumberColumn("发货计划量", format="%d", alignment="center",width=1),
         }
     )
 
@@ -2719,10 +2719,10 @@ def actual_turnover_area(df_country_turnover,df_历史海外周转,filters):
 
 
     def get_trend_text_and_color(val):
-        if val > 0:
-            return f"↗{val:.1f}%", "red"
+        if val > 0.01:
+            return f"{val:.1f}%", "red"
         else:
-            return f"↘{abs(val):.1f}%", "green"
+            return f"{abs(val):.1f}%", "green"
 
     text_labels = result_df['断货率'].apply(lambda x: get_trend_text_and_color(x)[0])
     marker_colors = result_df['断货率'].apply(lambda x: get_trend_text_and_color(x)[1])
