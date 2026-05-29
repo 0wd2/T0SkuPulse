@@ -2611,6 +2611,8 @@ def actual_turnover_area(df_country_turnover,df_历史海外周转,filters):
     # 合并结果
     result_df = pd.concat([res_ct['国内在库周转'], res_hw[['海外在库周转', '海外在途周转', '断货率']]], axis=1).reset_index()
     result_df['海外总周转'] = (((result_df['海外在库周转'] + result_df['海外在途周转']).round(1)))
+    result_df=result_df.sort_values(by='周数')
+    result_df=result_df.reset_index(drop=True)
     fig_历史周转 = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True, 
