@@ -375,8 +375,8 @@ with fixed_container:
                 curr_avg_ltyuce = 0
             # ganyu_intervention_rate = df_ganyu_bi["有干预样本数"].sum() / df_ganyu_bi["总样本数"].sum()
             ganyu_intervention_rate = len(df_ganyu_kpi[(df_ganyu_kpi['周数']==last_dt_history) & (df_ganyu_kpi['是否有干预']=="是")]) / len(df_ganyu_kpi[df_ganyu_kpi['周数']==last_dt_history])
-            curr_avg_ganyu = df_ganyu_kpi[(df_ganyu_kpi['周数']==last_dt_history)]['单周干预偏差率'].abs().mean()
-            curr_avg_huanbiganyu = df_ganyu_kpi[(df_ganyu_kpi['周数']==last_dt_history)]['环比干预偏差率'].abs().mean()
+            curr_avg_ganyu = df_ganyu_kpi[(df_ganyu_kpi['周数']==last_dt_history) & (df_ganyu_kpi['是否有干预']=="是")]['单周干预偏差率'].abs().mean()
+            curr_avg_huanbiganyu = df_ganyu_kpi[(df_ganyu_kpi['周数']==last_dt_history) & (df_ganyu_kpi['是否有干预']=="是")]['环比干预偏差率'].abs().mean()
 
             df_country_turnover = df_country_turnover[df_country_turnover['周数']==last_dt_history]
             历史国内在库周转 = ((((df_country_turnover['当周期初在库'] * df_country_turnover['单价']).sum() + (df_country_turnover['下周期初在库'] * df_country_turnover['单价']).sum()) / 2) / ((df_country_turnover['当周周销']*df_country_turnover['单价'])/7).sum()).round(1)
@@ -2201,6 +2201,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
         # 删除海外周转天数列值为0的行
         result_df = result_df[result_df['海外周转天数'] != 0]
         result_df['周数new'] = result_df["周数"].str[2:]
+        result_df = result_df[result_df['周数'] >= '2026w18']
         fig_子市场发货 = make_subplots(
             rows=2, cols=1, 
             shared_xaxes=True,          
