@@ -592,7 +592,7 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
     fig.update_yaxes(
         showgrid=True, 
         gridcolor='whitesmoke',
-        range=[0, 110]
+        range=[0, 120]
     )
 
     # 6. 在 Streamlit 中显示
@@ -1096,14 +1096,14 @@ def predictSales_rate_area(df_yuce, curr_filters):
             # 左侧 Y 轴配置
             yaxis=dict(
                 title="单周预测偏差率",
-                range=[0, 1.0],  
+                range=[0, 1.1],  
                 tickformat=".0%", 
                 side="left"
             ),
             # 右侧 Y 轴配置
             yaxis2=dict(
                 title="环比预测偏差率",
-                range=[0, 0.2],  
+                range=[0, 0.3],  
                 tickformat=".0%", 
                 overlaying="y",   
                 side="right"
@@ -1188,7 +1188,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             ),
             row=1, col=2
         )
-        for line_x in [0.05, -0.05]:
+        for line_x in [0.05]:
             fig.add_vline(
                 x=line_x, 
                 line_dash="dash", 
@@ -1217,7 +1217,7 @@ def predictSales_rate_area(df_yuce, curr_filters):
             xaxis2=dict(
                 title="环比偏差(5%)",
                 tickformat=".0%",
-                range=[0, 0.5], # 环比范围固定，方便观察斜率
+                range=[-0.1, 0.55], # 环比范围固定，方便观察斜率
                 showgrid=False,
                 zeroline=True
             ),
@@ -1685,36 +1685,17 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
                 textfont=dict(size=14, color="black")
             )
         )
-        fig_历史干预曲线.add_hline(
-            y=0.30,
-            line_dash="dash",
-            line_color="#1f77b4",  
-            annotation_text="干预偏差: 30%",
-            annotation_position="bottom right",
-            opacity=0.7
-            
-        )
-        fig_历史干预曲线.add_shape(
-            type="line",
-            xref="paper", yref="y2",
-            x0=0, y0=0.05,
-            x1=1, y1=0.05,
-            line=dict(color="#ff7f0e", width=2, dash="dash"),
-            opacity=0.7
-        )
         max_y1 = df_filtered_week_agg["单周干预偏差率"].max().round(1)
         max_y2 = df_filtered_week_agg["环比干预偏差率"].max().round(1)
         fig_历史干预曲线.update_layout(
             # 左侧 Y 轴配置
             yaxis=dict(
-                title="单周干预偏差率",
                 range=[0, max_y1+0.2],  
                 tickformat=".0%", 
                 side="left"
             ),
             # 右侧 Y 轴配置
             yaxis2=dict(
-                title="环比干预偏差率",
                 range=[0, max_y2+0.05],  
                 tickformat=".0%", 
                 overlaying="y",   
@@ -1733,7 +1714,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
             font=dict(family="Microsoft YaHei",size=12)
         )
 
-        st.plotly_chart(fig_历史干预曲线,width="stretch",height=500)
+        st.plotly_chart(fig_历史干预曲线,width="stretch",height=550)
 
 
 
@@ -1832,7 +1813,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
             xaxis2=dict(
                 title="环比偏差率",
                 tickformat=".0%",
-                range=[0, 0.5], # 环比范围固定，方便观察斜率
+                range=[-0.1, 0.55], # 环比范围固定，方便观察斜率
                 showgrid=False,
                 zeroline=True,
                 # 修改X轴区间范围
@@ -1846,7 +1827,7 @@ def ganyuSales_rate_area(df_ganyu, curr_filters):
         fig.update_yaxes(showticklabels=False, row=1, col=2)
         fig.update_yaxes(tickfont=dict(size=13), row=1, col=1)
 
-        st.plotly_chart(fig, width='stretch',height=500)
+        st.plotly_chart(fig, width='stretch',height=550)
     
     detail_cat,detail_sku_ganyu = st.columns([2,3])
     df_cat = df_filtered[df_filtered["周数"] == select_week].groupby("品类").agg({
