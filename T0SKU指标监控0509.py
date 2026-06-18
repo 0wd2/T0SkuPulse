@@ -445,12 +445,12 @@ with fixed_container:
             c2.metric("海外在库周转",历史海外在库周转,"目标: P1:45天,P2:30天",delta_color="green",help="(期初在库x单价+期末在库x单价)/2/(周销x单价/7)")
             c3.metric("海外在途周转",历史海外在途周转,"目标: 60天",delta_color="green",help="(期初在途x单价+期末在途x单价)/2/(周销x单价/7)")
             c4.metric("国内在库周转", f"{历史国内在库周转:.1f}", delta=f"目标: 60天", delta_color="green",help="(国内期初在库x单价+国内期末在库x单价)/2/(周销x单价/7)")
-            c5.metric("预测偏差率", f"{curr_avg_yuce:.0%}",delta="目标: 35%",delta_color="green")
-            c6.metric("预测偏差率(环比)", f"{curr_avg_huanbiyuce:.0%}",delta="目标: 5%",delta_color="green")
-            c7.metric("预测偏差率(LT前)", f"{curr_avg_ltyuce:.0%}",delta="目标: 35%",delta_color="green")
-            c8.metric("干预SKU占比", f"{ganyu_intervention_rate:.0%}",delta="目标: 15%",delta_color="green")
-            c9.metric("干预偏差率", f"{curr_avg_ganyu:.0%}",delta="目标: 30%",delta_color="green")
-            c10.metric("干预偏差率(环比)", f"{curr_avg_huanbiganyu:.0%}",delta="目标: 5%",delta_color="green")    
+            c5.metric("预测偏差率", f"{curr_avg_yuce:.0%}",delta="目标: 35%",delta_color="green",help="|预测值-实际值|/实际值")
+            c6.metric("预测偏差率(环比)", f"{curr_avg_huanbiyuce:.0%}",delta="目标: 5%",delta_color="green",help="|上周版本对LT后预测值 - 本周版本对LT后预测值|/本周版本对LT后预测值")
+            c7.metric("预测偏差率(LT前)", f"{curr_avg_ltyuce:.0%}",delta="目标: 35%",delta_color="green",help="|LT前对本周的预测值-本周实际值|/本周实际值")
+            c8.metric("干预SKU占比", f"{ganyu_intervention_rate:.0%}",delta="目标: 15%",delta_color="green",help="干预SKU数/总SKU数")
+            c9.metric("干预偏差率", f"{curr_avg_ganyu:.0%}",delta="目标: 30%",delta_color="green",help="|干预值-实际值|/实际值")
+            c10.metric("干预偏差率(环比)", f"{curr_avg_huanbiganyu:.0%}",delta="目标: 5%",delta_color="green",help="|上周版本对LT后的干预值 - 本周版本对LT后干预值|/本周版本对LT后干预值")    
             
 
 
@@ -957,7 +957,7 @@ def inventorySales_rate_area(df_stock_turnover,df_历史海外周转, curr_filte
   
 # 预测指标区域
 @st.fragment
-def predictSales_rate_area(df_yuce, curr_filters):
+def predictSales_rate_area(df_yuce,df_LT前预测偏差, curr_filters):
     df = apply_filters(df_yuce, curr_filters)
     if df is None or df.empty:
         st.warning("无数据")
@@ -1009,13 +1009,30 @@ def predictSales_rate_area(df_yuce, curr_filters):
         df_filtered = df_filtered[df_filtered["状态"] == "断货"]
     elif select_stockStatus == "非断货":
         df_filtered = df_filtered[df_filtered["状态"] != "断货"]
+    
+    df_LT前预测偏差_filter = df_LT前预测偏差.copy()
+    if selected_market != "全部市场":
+        df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["子市场"] == selected_market]
+
+    if selected_category != "全部品类":
+        df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["品类"] == selected_category]
+
+    if selected_sku != "全部SKU":
+        df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["主料mrpsku"] == selected_sku]
+
+    if select_stockStatus == "断货":
+        df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["状态"] == "断货"]
+    elif select_stockStatus == "非断货":
+        df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["状态"] != "断货"]  
 
     # df_filtered_noOutStock = df_filtered[df_filtered["状态"] != "断货"]
     单周预测偏差 = df_filtered[df_filtered["周数"] == select_week]["单周预测偏差率"].abs().mean()
     环比预测偏差 = df_filtered[df_filtered["周数"] == select_week]["环比预测偏差率"].abs().mean()
-    m_col1, m_col2 = st.columns(2)
+    LT前预测偏差 = df_LT前预测偏差_filter[df_LT前预测偏差_filter["周数"] == select_week]["实际周销与预测周销的预测偏差率"].abs().mean()
+    m_col1, m_col2 ,m_col3 = st.columns(3)
     m_col1.metric("预测偏差率", f"{单周预测偏差:.0%}", delta="目标:35%")
     m_col2.metric("预测偏差率(环比)", f"{环比预测偏差:.0%}", delta="目标:5%")
+    m_col3.metric("预测偏差率(LT前)", f"{LT前预测偏差:.0%}", delta="目标:35%")
     col_left, col_right = st.columns(2)
     stage_cols = ["单周预测偏差率", "环比预测偏差率"]
     df_filtered[stage_cols] = df_filtered[stage_cols].abs()
@@ -2182,7 +2199,11 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
         # 删除海外周转天数列值为0的行
         result_df = result_df[result_df['海外周转天数'] != 0]
         result_df['周数new'] = result_df["周数"].str[2:]
-        result_df = result_df[result_df['周数'] >= '2026w18']
+        # result_df = result_df[result_df['周数'] >= '2026w18']
+        # 取周数最后的6周
+        six_weeks = result_df['周数'].sort_values().unique()[-6:]
+        result_df = result_df[result_df['周数'].isin(six_weeks)]
+        # st.write(result_df[result_df['周数']=="2026w24"])
         fig_子市场发货 = make_subplots(
             rows=2, cols=1, 
             shared_xaxes=True,          
@@ -2531,7 +2552,7 @@ def delivery_stock_area(df_fahuo,df_历史海外周转,df_断货无在途, curr_
     st.dataframe(
         df_断货无在途_filtered[['子市场','主料mrpsku','层级','品类','二级品类','状态','二级状态','货源地','规格','主料可用库存','替代料可用库存','待上架库存','IQC','是否有尺寸','发货计划量']],
         width='stretch', 
-        height=500,
+        height=300,
         column_config={
             "子市场": st.column_config.TextColumn("子市场", width=0.5),
             "主料mrpsku": st.column_config.TextColumn("主料mrpsku", width=5),
@@ -2811,7 +2832,7 @@ if st.session_state.df_fahuo is not None:
     # 预测指标区域
     st.markdown("# 销")
     st.header("📈 预测指标", anchor="3")
-    predictSales_rate_area(st.session_state.df_yuce, curr_filters)
+    predictSales_rate_area(st.session_state.df_yuce,st.session_state.df_LT前预测偏差, curr_filters)
     st.divider()
     # 干预指标区域
     st.header("🛠️ 干预指标", anchor="4")
