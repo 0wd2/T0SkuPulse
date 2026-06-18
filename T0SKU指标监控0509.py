@@ -1035,18 +1035,21 @@ def predictSales_rate_area(df_yuce,df_LT前预测偏差, curr_filters):
     m_col3.metric("预测偏差率(LT前)", f"{LT前预测偏差:.0%}", delta="目标:35%")
     col_left, col_right = st.columns(2)
     stage_cols = ["单周预测偏差率", "环比预测偏差率"]
-    df_filtered[stage_cols] = df_filtered[stage_cols].abs()
-    df_m = df_filtered[df_filtered["周数"] == select_week].groupby("子市场").agg({
+    # df_filtered[stage_cols] = df_filtered[stage_cols].abs()
+    df_filter_abs = df_filtered.copy()
+    df_filter_abs[stage_cols] = df_filter_abs[stage_cols].abs()
+    df_m = df_filter_abs[df_filter_abs["周数"] == select_week].groupby("子市场").agg({
         "单周预测偏差率": "mean",
         "环比预测偏差率": "mean",
         "主料mrpsku": "count"
     }).reset_index()
+
     df_m = df_m.rename(columns={"主料mrpsku": "SKU数量"})
     df_m = df_m.sort_values(by="SKU数量", ascending=True)
 
     with col_left:
         st.markdown("#### 历史预测偏差趋势")
-        df_filtered_week = df_filtered.groupby("周数").agg({
+        df_filtered_week = df_filter_abs.groupby("周数").agg({
             "单周预测偏差率": "mean",
             "环比预测偏差率": "mean"
         }).reset_index()
