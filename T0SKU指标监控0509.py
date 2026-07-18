@@ -388,19 +388,21 @@ with fixed_container:
                 df_ganyu_kpi[df_ganyu_kpi['周数'] == last_dt_history])
             curr_avg_ganyu = df_ganyu_kpi[(df_ganyu_kpi['周数'] == last_dt_history) & (df_ganyu_kpi['是否有干预'] == "是")]['单周干预偏差率'].abs().mean()
             curr_avg_huanbiganyu = df_ganyu_kpi[(df_ganyu_kpi['周数'] == last_dt_history) & (df_ganyu_kpi['是否有干预'] == "是")]['环比干预偏差率'].abs().mean()
-            df_country_turnover = df_country_turnover[df_country_turnover['周数'] == last_dt_history]
-            历史国内在库周转 = ((((df_country_turnover['当周期初在库'] * df_country_turnover['单价']).sum() + (
-                        df_country_turnover['下周期初在库'] * df_country_turnover['单价']).sum()) / 2) / ((df_country_turnover['当周周销'] *df_country_turnover['单价']) / 7).sum()).round(1)
+            历史国内在库周转 = (df_country_turnover[df_country_turnover['周数'] == last_dt_history]['国内在库周转天数'].iloc[0]).round(1)
             df_历史海外周转 = df_历史海外周转[df_历史海外周转['周数'] == last_dt_history]
-            历史海外在库周转 = (((((df_历史海外周转['历史当周期初在库'] * df_历史海外周转['单价']).sum() + (df_历史海外周转['历史下周期初在库'] * df_历史海外周转['单价']).sum()) / 2) / ((df_历史海外周转['历史当周周销'] *df_历史海外周转['单价']) / 7).sum())).round(1)
-            历史海外在途周转 = ((((df_历史海外周转['历史当周期初在途'] * df_历史海外周转['单价']).sum() + (
-                        df_历史海外周转['历史下周期初在途'] * df_历史海外周转['单价']).sum()) / 2) / ((df_历史海外周转['历史当周周销'] *df_历史海外周转['单价']) / 7).sum()).round(1)
+            历史海外在库周转 = (((df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['周初库存金额'].sum() * (1-df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['亚马逊期初调仓比例'].iloc[0]) + df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='NoAmazon']['周初库存金额'].sum()) + (df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['周末库存金额'].sum() * (1-df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['亚马逊期末调仓比例'].iloc[0]) + df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='NoAmazon']['周末库存金额'].sum()))/2 /(df_历史海外周转['周销售出库金额'].sum()/7+0.001)).round(1)
+
+            历史海外在途周转 = (((df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['周初在途金额'].sum() + df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['周初库存金额'].sum() * df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['亚马逊期初调仓比例'].iloc[0] + df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='NoAmazon']['周初在途金额'].sum()) + (df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['周末在途金额'].sum() + df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['周末库存金额'].sum() * df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='Amazon']['亚马逊期末调仓比例'].iloc[0] + df_历史海外周转[df_历史海外周转['是否亚马逊市场']=='NoAmazon']['周末在途金额'].sum()))/2 /(
+                df_历史海外周转['周销售出库金额'].sum()/7+0.001)).round(1)
+            
+
+
             # 剔除清仓状态、新品FBM状态、新品状态且在库为0的SKU
             # 断货率 = df_历史海外周转[df_历史海外周转['状态']=='断货'].shape[0]/df_历史海外周转.shape[0]
             valid_mask = (
                     (df_历史海外周转['状态'] != '清仓') &
                     (df_历史海外周转['状态'] != '新品FBM') &
-                    ~((df_历史海外周转['状态'] == '新品') & (df_历史海外周转['历史当周期初在库'] == 0))
+                    ~((df_历史海外周转['状态'] == '新品') & (df_历史海外周转['周初库存数量'] == 0))
             )
             df_valid = df_历史海外周转[valid_mask]
 
@@ -673,26 +675,13 @@ def inventorySales_rate_area(df_stock_turnover, df_历史海外周转, curr_filt
 
     st.dataframe(
         df_历史海外周转_过滤[
-            ['周数', '子市场', '主料mrpsku', '品类', '状态', '历史海外在库周转', '历史海外在途周转', "海外在库周转目标",
-             "海外在途周转目标", '历史当周周销', '仿真当周周销', '在库周转问题定义', '在途周转问题定义']],
+            ['子市场',	'mrp主料',	'品类',	'状态',	'货源地',	'是否亚马逊市场',	'周数',	'周初库存数量',	'周初库存金额',	'周末库存数量',	'周末库存金额',	'周初在途数量',	'周初在途金额',	'周末在途数量',	'周末在途金额',	'周销售出库','周销售出库金额',	'亚马逊期初调仓比例','亚马逊期末调仓比例']],
         column_config={
             "周数": st.column_config.TextColumn("周数", width=10),
             "子市场": st.column_config.TextColumn("子市场", width=1),
             "品类": st.column_config.TextColumn("品类", width=1),
-            "主料mrpsku": st.column_config.TextColumn("MRPSKU", width=50),
-            "状态": st.column_config.TextColumn("状态", width=2),
-            "历史当周周销": st.column_config.NumberColumn("真实周销", format="%d", width=10, alignment="center"),
-            "仿真当周周销": st.column_config.NumberColumn("仿真周销", format="%d", width=10, alignment="center"),
-            "历史海外在库周转": st.column_config.NumberColumn("真实海外在库周转", format="%d", width=20,
-                                                              alignment="center"),
-            "历史海外在途周转": st.column_config.NumberColumn("真实海外在途周转", format="%d", width=20,
-                                                              alignment="center"),
-            "海外在库周转目标": st.column_config.NumberColumn("海外在库周转目标", format="%d", width=10,
-                                                              alignment="center"),
-            "海外在途周转目标": st.column_config.NumberColumn("海外在途周转目标", format="%d", width=10,
-                                                              alignment="center"),
-            "在库周转问题定义": st.column_config.TextColumn("在库周转问题定义", width=50),
-            "在途周转问题定义": st.column_config.TextColumn("在途周转问题定义", width=50),
+            "mrp主料": st.column_config.TextColumn("MRPSKU", width=50),
+            "状态": st.column_config.TextColumn("状态", width=2)
         },
         hide_index=True,
         width="stretch",
@@ -1060,22 +1049,6 @@ def predictSales_rate_area(df_yuce, curr_filters):
     elif select_stockStatus == "非断货":
         df_filtered = df_filtered[df_filtered["状态"] != "断货"]
 
-    # df_LT前预测偏差_filter = df_LT前预测偏差.copy()
-    # if selected_market != "全部市场":
-    #     df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["子市场"] == selected_market]
-
-    # if selected_category != "全部品类":
-    #     df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["品类"] == selected_category]
-
-    # if selected_sku != "全部SKU":
-    #     df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["主料mrpsku"] == selected_sku]
-
-    # if select_stockStatus == "断货":
-    #     df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["状态"] == "断货"]
-    # elif select_stockStatus == "非断货":
-    #     df_LT前预测偏差_filter = df_LT前预测偏差_filter[df_LT前预测偏差_filter["状态"] != "断货"]
-
-        # df_filtered_noOutStock = df_filtered[df_filtered["状态"] != "断货"]
     单周预测偏差 = df_filtered[df_filtered["周数"] == select_week]["单周预测偏差率"].abs().mean()
     环比预测偏差 = df_filtered[df_filtered["周数"] == select_week]["环比预测偏差率"].abs().mean()
     # LT前预测偏差 = df_LT前预测偏差_filter[df_LT前预测偏差_filter["周数"] == select_week][
@@ -2245,26 +2218,60 @@ def delivery_stock_area(df_fahuo, df_历史海外周转, df_断货无在途, cur
         df_达成率 = pd.merge(df_达成率, df_SKU数量, on=['子市场'], how='left')
         df_周转 = df_周转_filtered_weeks.copy()
         # 提前计算好带单价的金额，提升后续聚合速度
-        df_周转['期初在库金额'] = df_周转['历史当周期初在库'] * df_周转['单价']
-        df_周转['下周期初在库金额'] = df_周转['历史下周期初在库'] * df_周转['单价']
-        df_周转['期初在途金额'] = df_周转['历史当周期初在途'] * df_周转['单价']
-        df_周转['下周期初在途金额'] = df_周转['历史下周期初在途'] * df_周转['单价']
-        df_周转['周销金额'] = df_周转['历史当周周销'] * df_周转['单价']
 
         exclude_mask = (
                 (df_周转['状态'] == '清仓') |
                 (df_周转['状态'] == '新品FBM') |
-                ((df_周转['状态'] == '新品') & (df_周转['历史当周期初在库'] == 0))
+                ((df_周转['状态'] == '新品') & (df_周转['周初库存数量'] == 0))
         )
         df_周转['是否断货'] = np.where(exclude_mask, np.nan, df_周转['状态'] == '断货')
         # df_周转['是否断货'] = (df_周转['状态'] == '断货')
-        df_周转_指标 = df_周转.groupby(['子市场', '周数'], as_index=False).agg(
-            海外在库周转=('期初在库金额', lambda x: ((x.sum() + df_周转.loc[x.index, '下周期初在库金额'].sum()) / 2) / (
-                        df_周转.loc[x.index, '周销金额'].sum() / 7)),
-            海外在途周转=('期初在途金额', lambda x: ((x.sum() + df_周转.loc[x.index, '下周期初在途金额'].sum()) / 2) / (
-                        df_周转.loc[x.index, '周销金额'].sum() / 7)),
-            断货率=('是否断货', 'mean')
-        )
+        def calculate_weekly_turnover(group):
+            # 拆分亚马逊与非亚马逊数据
+            df_amz = group[group['是否亚马逊市场'] == 'Amazon']
+            df_no_amz = group[group['是否亚马逊市场'] == 'NoAmazon']
+            
+            # 安全获取比例（增加空值判断）
+            ratio_begin = df_amz['亚马逊期初调仓比例'].iloc[0] if not df_amz.empty else 0
+            ratio_end = df_amz['亚马逊期末调仓比例'].iloc[0] if not df_amz.empty else 0
+            
+            # 销售分母换算为日均
+            sum_sales_daily = (group['周销售出库金额'].sum() / 7) + 0.001
+            
+            # 计算在库周转
+            amz_stock_begin = df_amz['周初库存金额'].sum()
+            no_amz_stock_begin = df_no_amz['周初库存金额'].sum()
+            stock_begin_adj = amz_stock_begin * (1 - ratio_begin) + no_amz_stock_begin
+            
+            amz_stock_end = df_amz['周末库存金额'].sum()
+            no_amz_stock_end = df_no_amz['周末库存金额'].sum()
+            stock_end_adj = amz_stock_end * (1 - ratio_end) + no_amz_stock_end
+            
+            海外在库周转 = round(((stock_begin_adj + stock_end_adj) / 2) / sum_sales_daily, 1)
+            
+            # 计算在途周转
+            amz_transit_begin = df_amz['周初在途金额'].sum()
+            no_amz_transit_begin = df_no_amz['周初在途金额'].sum()
+            transit_begin_adj = amz_transit_begin + (amz_stock_begin * ratio_begin) + no_amz_transit_begin
+            
+            amz_transit_end = df_amz['周末在途金额'].sum()
+            no_amz_transit_end = df_no_amz['周末在途金额'].sum()
+            transit_end_adj = amz_transit_end + (amz_stock_end * ratio_end) + no_amz_transit_end
+            
+            海外在途周转 = round(((transit_begin_adj + transit_end_adj) / 2) / sum_sales_daily, 1)
+            
+            # 计算断货率
+            断货率 = round(group['是否断货'].mean(), 2)
+            
+            return pd.Series({
+                '海外在库周转': 海外在库周转,
+                '海外在途周转': 海外在途周转,
+                '断货率': 断货率
+            })
+
+        # 4. 计算海外指标
+        df_周转_指标 = df_周转.groupby(['子市场', '周数']).apply(calculate_weekly_turnover).reset_index()
+
 
         df_周转_指标['海外周转天数'] = df_周转_指标[['海外在库周转', '海外在途周转']].sum(axis=1)
         df_周转_指标[['海外在库周转', '海外在途周转', '海外周转天数']] = df_周转_指标[
@@ -2533,7 +2540,7 @@ def delivery_stock_area(df_fahuo, df_历史海外周转, df_断货无在途, cur
     exclude_mask = (
             (df_周转_filtered_oneweek['状态'] == '清仓') |
             (df_周转_filtered_oneweek['状态'] == '新品FBM') |
-            ((df_周转_filtered_oneweek['状态'] == '新品') & (df_周转_filtered_oneweek['历史当周期初在库'] == 0))
+            ((df_周转_filtered_oneweek['状态'] == '新品') & (df_周转_filtered_oneweek['周初库存数量'] == 0))
     )
     df_周转_filtered_oneweek['用于计算断货的状态'] = np.where(exclude_mask, np.nan,
                                                               (df_周转_filtered_oneweek['状态'] == '断货').astype(
@@ -2673,43 +2680,71 @@ def actual_turnover_area(df_country_turnover, df_历史海外周转, filters):
     if df_country_turnover is None or df_country_turnover.empty:
         st.warning("无数据")
         return
-
     df_ct = df_country_turnover.copy()
-    df_ct['stock_val'] = df_ct['当周期初在库'] * df_ct['单价']
-    df_ct['next_stock_val'] = df_ct['下周期初在库'] * df_ct['单价']
-    df_ct['sales_val'] = df_ct['当周周销'] * df_ct['单价']
-
-    # 一次性聚合，避免 Python 循环
     res_ct = df_ct.groupby('周数').agg({
-        'stock_val': 'sum',
-        'next_stock_val': 'sum',
-        'sales_val': 'sum'
-    })
-    res_ct['国内在库周转'] = ((res_ct['stock_val'] + res_ct['next_stock_val']) / 2) / (res_ct['sales_val'] / 7)
+        '国内在库周转天数': 'first'
+    }).reset_index().rename(columns={'国内在库周转天数': '国内在库周转'})
 
-    # --- 优化后的海外周转计算 ---
+    # 2. 准备海外数据
     df_hw = df_历史海外周转.copy()
-    df_hw['stock_val'] = df_hw['历史当周期初在库'] * df_hw['单价']
-    df_hw['next_stock_val'] = df_hw['历史下周期初在库'] * df_hw['单价']
-    df_hw['transit_val'] = df_hw['历史当周期初在途'] * df_hw['单价']
-    df_hw['next_transit_val'] = df_hw['历史下周期初在途'] * df_hw['单价']
-    df_hw['sales_val'] = df_hw['历史当周周销'] * df_hw['单价']
-    df_hw['is_duanhua'] = (df_hw['状态'] == '断货').astype(int)
-    res_hw = df_hw.groupby('周数').agg({
-        'stock_val': 'sum', 'next_stock_val': 'sum',
-        'transit_val': 'sum', 'next_transit_val': 'sum',
-        'sales_val': 'sum', 'is_duanhua': 'mean'
-    })
+    df_hw['is_duanhuo'] = (df_hw['状态'] == '断货').astype(int)
 
-    res_hw['海外在库周转'] = (((res_hw['stock_val'] + res_hw['next_stock_val']) / 2) / (res_hw['sales_val'] / 7)).round(
-        1)
-    res_hw['海外在途周转'] = (
-                ((res_hw['transit_val'] + res_hw['next_transit_val']) / 2) / (res_hw['sales_val'] / 7)).round(1)
-    res_hw['断货率'] = res_hw['is_duanhua'] * 100
-    # 合并结果
-    result_df = pd.concat([res_ct['国内在库周转'], res_hw[['海外在库周转', '海外在途周转', '断货率']]],
-                          axis=1).reset_index()
-    result_df['海外总周转'] = (((result_df['海外在库周转'] + result_df['海外在途周转']).round(1)))
+    # 3. 定义每周计算指标的函数
+    def calculate_weekly_turnover(group):
+        # 拆分亚马逊与非亚马逊数据
+        df_amz = group[group['是否亚马逊市场'] == 'Amazon']
+        df_no_amz = group[group['是否亚马逊市场'] == 'NoAmazon']
+        
+        # 安全获取比例（增加空值判断）
+        ratio_begin = df_amz['亚马逊期初调仓比例'].iloc[0] if not df_amz.empty else 0
+        ratio_end = df_amz['亚马逊期末调仓比例'].iloc[0] if not df_amz.empty else 0
+        
+        # 销售分母换算为日均
+        sum_sales_daily = (group['周销售出库金额'].sum() / 7) + 0.001
+        
+        # 计算在库周转
+        amz_stock_begin = df_amz['周初库存金额'].sum()
+        no_amz_stock_begin = df_no_amz['周初库存金额'].sum()
+        stock_begin_adj = amz_stock_begin * (1 - ratio_begin) + no_amz_stock_begin
+        
+        amz_stock_end = df_amz['周末库存金额'].sum()
+        no_amz_stock_end = df_no_amz['周末库存金额'].sum()
+        stock_end_adj = amz_stock_end * (1 - ratio_end) + no_amz_stock_end
+        
+        海外在库周转 = round(((stock_begin_adj + stock_end_adj) / 2) / sum_sales_daily, 1)
+        
+        # 计算在途周转
+        amz_transit_begin = df_amz['周初在途金额'].sum()
+        no_amz_transit_begin = df_no_amz['周初在途金额'].sum()
+        transit_begin_adj = amz_transit_begin + (amz_stock_begin * ratio_begin) + no_amz_transit_begin
+        
+        amz_transit_end = df_amz['周末在途金额'].sum()
+        no_amz_transit_end = df_no_amz['周末在途金额'].sum()
+        transit_end_adj = amz_transit_end + (amz_stock_end * ratio_end) + no_amz_transit_end
+        
+        海外在途周转 = round(((transit_begin_adj + transit_end_adj) / 2) / sum_sales_daily, 1)
+        
+        # 计算断货率
+        断货率 = round(group['is_duanhuo'].mean() * 100, 2)
+        return pd.Series({
+            # '周初库存数量': stock_begin_adj,
+            # '周末库存数量': stock_end_adj,
+            # '周初在途金额': transit_begin_adj,
+            # '周末在途金额': transit_end_adj,
+            '海外在库周转': 海外在库周转,
+            '海外在途周转': 海外在途周转,
+            '断货率': 断货率
+        })
+
+    # 4. 计算海外指标
+    res_hw = df_hw.groupby('周数').apply(calculate_weekly_turnover).reset_index()
+    
+    # 5. 安全合并结果（使用 merge 按 '周数' 对齐）
+    # how='outer' 确保如果某周只有国内或只有海外数据时，数据不会丢失（可根据需要改为 'inner'）
+    result_df = pd.merge(res_ct, res_hw, on='周数', how='outer')
+
+    # 6. 计算海外总周转并保留 1 位小数
+    result_df['海外总周转'] = (result_df['海外在库周转'] + result_df['海外在途周转']).round(1)
     result_df = result_df.sort_values(by='周数')
     result_df = result_df.reset_index(drop=True)
     fig_历史周转 = make_subplots(
@@ -2876,7 +2911,7 @@ def actual_turnover_area(df_country_turnover, df_历史海外周转, filters):
             font=dict(size=16, color="black")
         )
     )
-    max_y = max(result_df['海外总周转']) + 30
+    max_y = max(result_df['海外总周转']) + 20
     # --- 坐标轴设置 ---
     fig_历史周转.update_yaxes(
         title_text="周转天数",
