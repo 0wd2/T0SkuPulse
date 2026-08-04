@@ -362,7 +362,7 @@ def 子市场指标分层级(result_df,targetDays1,targetDays2,outStockRate):
             )
         )
     )
-    result_df['目标天数'] = result_df['目标天数'].round(0)
+    # result_df['目标天数'] = result_df['目标天数'].round(0)
     result_df['子市场_new'] = (
             result_df['子市场'].astype(str) + '<br>' +
             '( ' + result_df['目标天数'].astype(str) + ' 天)' + '<br>' +
