@@ -337,6 +337,8 @@ def 子市场指标分层级(result_df,targetDays1,targetDays2,outStockRate):
     latest_sku_map = df_sorted_temp.groupby('子市场')['SKU数量'].last()
     result_df['最新SKU数量'] = result_df['子市场'].map(latest_sku_map)
     market_order = latest_sku_map.sort_values(ascending=False).index.tolist()
+    result_df['SKU数量占比'] = (result_df['子市场'].map(latest_sku_map)/ latest_sku_map.sum())*100
+    result_df['SKU数量占比'] = result_df['SKU数量占比'].round(1)
     result_df['子市场'] = pd.Categorical(result_df['子市场'], categories=market_order, ordered=True)
     result_df = result_df.sort_values(by=['子市场', '周数'])
     result_df = result_df.reset_index(drop=True)
@@ -348,25 +350,47 @@ def 子市场指标分层级(result_df,targetDays1,targetDays2,outStockRate):
         specs=[[{"secondary_y": False}], [{"secondary_y": False}]]
     )
     result_df['周数new'] = result_df["周数"].str[2:]
-    # 不同子市场添加目标天数
-    result_df['目标天数'] = np.where(
-        result_df['子市场'] == 'DE',
-        f"{targetDays1+24}-{targetDays2+24}", 
-        np.where(
-            result_df['子市场'] == 'APM',
-            f"{targetDays1+30}-{targetDays2+30}",
-            np.where(
-                result_df['子市场'] == 'AP-CA',
-                f"{targetDays1+30}-{targetDays2+30}",
-                f"{targetDays1}-{targetDays2}"
-            )
-        )
-    )
-    # result_df['目标天数'] = result_df['目标天数'].round(0)
-    result_df['子市场_new'] = (
-            result_df['子市场'].astype(str) + '<br>' +
-            '( ' + result_df['目标天数'].astype(str) + ' 天)' + '<br>' +
-            '( ' + result_df['最新SKU数量'].astype(str) + ' 个)'
+    # # 不同子市场添加目标天数
+    # if mc_level == 'TOP0':
+    #     result_df['目标天数'] = np.where(
+    #         result_df['子市场'] == 'DE',
+    #         f"{targetDays1+24}",
+    #         np.where(
+    #             result_df['子市场'] == 'APM',
+    #             f"{targetDays1+30}",
+    #             np.where(
+    #                 result_df['子市场'] == 'AP-CA',
+    #                 f"{targetDays1+30}",
+    #                 f"{targetDays1}"
+    #             )
+    #         )
+    #     )
+    # else:
+    #     result_df["目标天数"] = np.where(
+    #         result_df["子市场"] == "DE",
+    #         f"{targetDays1 + 24}-{targetDays2 + 24}",
+    #         np.where(
+    #             result_df["子市场"] == "APM",
+    #             f"{targetDays1 + 30}-{targetDays2 + 30}",
+    #             np.where(
+    #                 result_df["子市场"] == "AP-CA",
+    #                 f"{targetDays1 + 30}-{targetDays2 + 30}",
+    #                 f"{targetDays1}-{targetDays2}",
+    #             ),
+    #         ),
+    #     )
+    # # result_df['目标天数'] = result_df['目标天数'].round(0)
+    result_df["子市场_new"] = (
+        result_df["子市场"].astype(str)
+        + "<br>"
+        + "( "
+        + result_df["最新SKU数量"].astype(str)
+        + " 个)"
+        + "<br>"
+        + "( "
+        + result_df["SKU数量占比"].astype(str)
+        + " %)"
+        + "<br>"
     )
 
     fig_子市场指标.add_trace(
