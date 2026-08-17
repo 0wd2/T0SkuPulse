@@ -23,6 +23,7 @@ st.markdown("<h2 style='text-align: center; color: #1E3A8A; margin:0;'>📊 全�
 if "df_海外周转" not in st.session_state: st.session_state.df_海外周转 = None
 if "df_国内在库周转" not in st.session_state: st.session_state.df_国内在库周转 = None
 if "df_断货率" not in st.session_state: st.session_state.df_断货率 = None
+if "df_海外周转目标" not in st.session_state: st.session_state.df_海外周转目标 = None
 
 @st.cache_data(show_spinner="正在解析并格式化数据，请稍候...", ttl=3600)
 def process_uploaded_files(uploaded_files):
@@ -59,6 +60,8 @@ def process_uploaded_files(uploaded_files):
                         data_pool["df_国内在库周转"] = format_df(pl.read_excel(f, sheet_name='国内在库周转').to_pandas())
                     if '断货率' in sn:
                         data_pool["df_断货率"] = format_df(pl.read_excel(f, sheet_name='断货率').to_pandas())
+                    if '海外周转目标' in sn:
+                        data_pool["df_海外周转目标"] = format_df(pl.read_excel(f, sheet_name='海外周转目标').to_pandas())
 
             elif file_type == 'parquet':
                 with io.BytesIO(file_bytes) as f:
@@ -95,7 +98,7 @@ with st.sidebar:
     st.divider()
 
 
-def 整体指标分层级(result_df,targetDays1,targetDays2,outStockRate):
+def 整体指标分层级(result_df,targetDays,outStockRate):
     result_df = result_df.sort_values(by='周数')
     fig_历史周转 = make_subplots(
         rows=2, cols=1,
@@ -195,22 +198,13 @@ def 整体指标分层级(result_df,targetDays1,targetDays2,outStockRate):
         col=1
     )
     fig_历史周转.add_hline(
-        y=targetDays1,
+        y=targetDays,
         line_dash="dash",
         line_color="#CC0033", 
-        annotation_text=f"目标: {targetDays1}天",
+        annotation_text=f"目标: {targetDays}天",
         annotation_position="bottom right",  
         opacity=0.7
     )
-    if targetDays2 != 0:
-        fig_历史周转.add_hline(
-            y=targetDays2,
-            line_dash="dash",
-            line_color="#CC0033", 
-            annotation_text=f"目标: {targetDays2}天",
-            annotation_position="bottom right",  
-            opacity=0.7
-        )
 
     def get_trend_text_and_color(val):
         if val > outStockRate:
@@ -298,7 +292,7 @@ def 整体指标分层级(result_df,targetDays1,targetDays2,outStockRate):
 
 
 @st.fragment
-def actual_turnover_area(df_海外周转, df_国内在库周转, df_断货率):
+def actual_turnover_area(df_海外周转, df_国内在库周转, df_断货率,df_海外周转目标):
     if df_海外周转 is None or df_海外周转.empty:
         st.warning("无数据")    
         return
@@ -324,18 +318,27 @@ def actual_turnover_area(df_海外周转, df_国内在库周转, df_断货率):
     result_df['海外周转天数'] = (((result_df['海外在库周转'] + result_df['海外在途周转']).round(1)))
     result_df = result_df.sort_values(by=['周数','层级'])
     result_df = result_df.reset_index(drop=True)
-    fig_历史周转_TOP0 = 整体指标分层级(result_df[result_df['层级']=='TOP0'],90,0,1)
-    fig_历史周转_TOP1 = 整体指标分层级(result_df[result_df['层级']=='TOP1'],90,105,2)
-    fig_历史周转_TOP10 = 整体指标分层级(result_df[result_df['层级']=='TOP10'],90,105,4)
-    fig_历史周转_TOP20 = 整体指标分层级(result_df[result_df['层级']=='TOP20'],90,105,6)
-    fig_历史周转_普通 = 整体指标分层级(result_df[result_df['层级']=='普通'],90,105,7.4)
+    targetDays_TOP0 = df_海外周转目标[df_海外周转目标['层级']=='TOP0']['海外周转目标By220'].values[0]
+    targetDays_TOP1 = df_海外周转目标[df_海外周转目标['层级']=='TOP1']['海外周转目标By220'].values[0]
+    targetDays_TOP10 = df_海外周转目标[df_海外周转目标['层级']=='TOP10']['海外周转目标By220'].values[0]
+    targetDays_TOP20 = df_海外周转目标[df_海外周转目标['层级']=='TOP20']['海外周转目标By220'].values[0]
+    targetDays_普通 = df_海外周转目标[df_海外周转目标['层级']=='普通']['海外周转目标By220'].values[0]
+    fig_历史周转_TOP0 = 整体指标分层级(result_df[result_df['层级']=='TOP0'],targetDays_TOP0,1)
+    fig_历史周转_TOP1 = 整体指标分层级(result_df[result_df['层级']=='TOP1'],targetDays_TOP1,2)
+    fig_历史周转_TOP10 = 整体指标分层级(result_df[result_df['层级']=='TOP10'],targetDays_TOP10,4)
+    fig_历史周转_TOP20 = 整体指标分层级(result_df[result_df['层级']=='TOP20'],targetDays_TOP20,6)
+    fig_历史周转_普通 = 整体指标分层级(result_df[result_df['层级']=='普通'],targetDays_普通,7.4)
     return fig_历史周转_TOP0, fig_历史周转_TOP1, fig_历史周转_TOP10, fig_历史周转_TOP20, fig_历史周转_普通
 
-def 子市场指标分层级(result_df,targetDays1,targetDays2,outStockRate):
+def 子市场指标分层级(result_df,targetDays,outStockRate):
     mc_level = result_df['层级'].unique()[0]
     df_sorted_temp = result_df.sort_values(['子市场', '周数'])
     latest_sku_map = df_sorted_temp.groupby('子市场')['SKU数量'].last()
     result_df['最新SKU数量'] = result_df['子市场'].map(latest_sku_map)
+    # 最新SKU数量添加金额分字符
+    result_df["最新SKU数量"] = result_df["最新SKU数量"].apply(
+        lambda x: f"{x:,.0f}" if pd.notna(x) else x
+    )
     market_order = latest_sku_map.sort_values(ascending=False).index.tolist()
     result_df['SKU数量占比'] = (result_df['子市场'].map(latest_sku_map)/ latest_sku_map.sum())*100
     result_df['SKU数量占比'] = result_df['SKU数量占比'].round(1)
@@ -350,46 +353,16 @@ def 子市场指标分层级(result_df,targetDays1,targetDays2,outStockRate):
         specs=[[{"secondary_y": False}], [{"secondary_y": False}]]
     )
     result_df['周数new'] = result_df["周数"].str[2:]
-    # # 不同子市场添加目标天数
-    # if mc_level == 'TOP0':
-    #     result_df['目标天数'] = np.where(
-    #         result_df['子市场'] == 'DE',
-    #         f"{targetDays1+24}",
-    #         np.where(
-    #             result_df['子市场'] == 'APM',
-    #             f"{targetDays1+30}",
-    #             np.where(
-    #                 result_df['子市场'] == 'AP-CA',
-    #                 f"{targetDays1+30}",
-    #                 f"{targetDays1}"
-    #             )
-    #         )
-    #     )
-    # else:
-    #     result_df["目标天数"] = np.where(
-    #         result_df["子市场"] == "DE",
-    #         f"{targetDays1 + 24}-{targetDays2 + 24}",
-    #         np.where(
-    #             result_df["子市场"] == "APM",
-    #             f"{targetDays1 + 30}-{targetDays2 + 30}",
-    #             np.where(
-    #                 result_df["子市场"] == "AP-CA",
-    #                 f"{targetDays1 + 30}-{targetDays2 + 30}",
-    #                 f"{targetDays1}-{targetDays2}",
-    #             ),
-    #         ),
-    #     )
-    # # result_df['目标天数'] = result_df['目标天数'].round(0)
     result_df["子市场_new"] = (
         result_df["子市场"].astype(str)
         + "<br>"
         + "( "
         + result_df["最新SKU数量"].astype(str)
-        + " 个)"
+        + "  个)"
         + "<br>"
-        + "( "
-        + result_df["SKU数量占比"].astype(str)
-        + " %)"
+        + "(目标： "
+        + str(targetDays)
+        + " 天)"
         + "<br>"
     )
 
@@ -604,7 +577,7 @@ def 子市场指标分层级(result_df,targetDays1,targetDays2,outStockRate):
 
 
 @st.fragment
-def delivery_stock_area(df_海外周转, df_断货率):
+def delivery_stock_area(df_海外周转, df_断货率, df_海外周转目标):
     df_hw = df_海外周转.groupby(["周数",'子市场','层级']).agg(
          期初库存金额 = ("期初库存金额", "sum"),
          期末库存金额 = ("期末库存金额", "sum"),
@@ -632,11 +605,26 @@ def delivery_stock_area(df_海外周转, df_断货率):
     result_df = result_df.reset_index(drop=True)
     six_weeks = result_df['周数'].sort_values().unique()[-4:]
     result_df = result_df[result_df['周数'].isin(six_weeks)]
-    fig_子市场指标_TOP0 = 子市场指标分层级(result_df[result_df['层级']=='TOP0'],90,90,0.01)
-    fig_子市场指标_TOP1 = 子市场指标分层级(result_df[result_df['层级']=='TOP1'],90,105,0.02)
-    fig_子市场指标_TOP10 = 子市场指标分层级(result_df[result_df['层级']=='TOP10'],90,105,0.04)
-    fig_子市场指标_TOP20 = 子市场指标分层级(result_df[result_df['层级']=='TOP20'],90,105,0.06)
-    fig_子市场指标_普通 = 子市场指标分层级(result_df[result_df['层级']=='普通'],90,105,0.074)
+    targetDays_TOP0 = df_海外周转目标[df_海外周转目标["层级"] == "TOP0"][
+        "海外周转目标By220"
+    ].values[0]
+    targetDays_TOP1 = df_海外周转目标[df_海外周转目标["层级"] == "TOP1"][
+        "海外周转目标By220"
+    ].values[0]
+    targetDays_TOP10 = df_海外周转目标[df_海外周转目标["层级"] == "TOP10"][
+        "海外周转目标By220"
+    ].values[0]
+    targetDays_TOP20 = df_海外周转目标[df_海外周转目标["层级"] == "TOP20"][
+        "海外周转目标By220"
+    ].values[0]
+    targetDays_普通 = df_海外周转目标[df_海外周转目标["层级"] == "普通"][
+        "海外周转目标By220"
+    ].values[0]
+    fig_子市场指标_TOP0 = 子市场指标分层级(result_df[result_df['层级']=='TOP0'],targetDays_TOP0,0.01)
+    fig_子市场指标_TOP1 = 子市场指标分层级(result_df[result_df['层级']=='TOP1'],targetDays_TOP1,0.02)
+    fig_子市场指标_TOP10 = 子市场指标分层级(result_df[result_df['层级']=='TOP10'],targetDays_TOP10,0.04)
+    fig_子市场指标_TOP20 = 子市场指标分层级(result_df[result_df['层级']=='TOP20'],targetDays_TOP20,0.06)
+    fig_子市场指标_普通 = 子市场指标分层级(result_df[result_df['层级']=='普通'],targetDays_普通,0.074)
     return fig_子市场指标_TOP0, fig_子市场指标_TOP1, fig_子市场指标_TOP10, fig_子市场指标_TOP20, fig_子市场指标_普通
 
 def 整体堆积柱状图(df_海外周转, df_国内在库周转, df_断货率, targetDays1, targetDays2, outStockRate):
@@ -864,8 +852,8 @@ if st.session_state.df_海外周转 is not None:
     # 历史实际周转区域
     st.header("📈 历史实际周转", anchor="0")
     整体堆积柱状图(st.session_state.df_海外周转, st.session_state.df_国内在库周转, st.session_state.df_断货率,90,90,1)
-    fig_历史周转_TOP0, fig_历史周转_TOP1, fig_历史周转_TOP10, fig_历史周转_TOP20, fig_历史周转_普通 = actual_turnover_area(st.session_state.df_海外周转, st.session_state.df_国内在库周转, st.session_state.df_断货率)
-    fig_子市场指标_TOP0, fig_子市场指标_TOP1, fig_子市场指标_TOP10, fig_子市场指标_TOP20, fig_子市场指标_普通 = delivery_stock_area(st.session_state.df_海外周转, st.session_state.df_断货率)
+    fig_历史周转_TOP0, fig_历史周转_TOP1, fig_历史周转_TOP10, fig_历史周转_TOP20, fig_历史周转_普通 = actual_turnover_area(st.session_state.df_海外周转, st.session_state.df_国内在库周转, st.session_state.df_断货率,st.session_state.df_海外周转目标)
+    fig_子市场指标_TOP0, fig_子市场指标_TOP1, fig_子市场指标_TOP10, fig_子市场指标_TOP20, fig_子市场指标_普通 = delivery_stock_area(st.session_state.df_海外周转, st.session_state.df_断货率,st.session_state.df_海外周转目标)
     st.header("📈 TOP0", anchor="1")
     st.plotly_chart(fig_历史周转_TOP0, width='stretch',key="fig_历史周转_TOP0")
     st.plotly_chart(fig_子市场指标_TOP0, width='stretch',key="fig_子市场指标_TOP0")
