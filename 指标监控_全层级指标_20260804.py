@@ -10,7 +10,7 @@ import plotly.express as px
 import numpy as np
 import warnings
 import fastexcel
-
+from streamlit_echarts import st_echarts, JsCode
 warnings.filterwarnings("ignore") 
 
 import io
@@ -244,6 +244,19 @@ def 整体指标分层级(result_df,targetDays,outStockRate):
         row=1, col=1
     )
 
+    fig_历史周转.update_xaxes(
+        type='category',
+        row=2, col=1,
+        tickfont=dict(size=14, color="black"),
+        # --- 核心新增部分 ---
+        rangeslider=dict(
+            visible=True,  # 显示底部滑动条
+            thickness=0.05, # 滑动条厚度
+            bgcolor="#F4F6F7"
+        ),
+    )
+
+
     fig_历史周转.update_layout(
         barmode='group',
         height=600,
@@ -288,7 +301,829 @@ def 整体指标分层级(result_df,targetDays,outStockRate):
     )
     return fig_历史周转
 
+def render_inventory_echarts(result_df, targetDays, outStockRate):
+    """
+    Streamlit + ECharts 实现整体指标分层级
 
+    参数
+    ----------
+    result_df : pandas.DataFrame
+
+        必须包含以下字段：
+
+        周数
+        海外在库周转
+        海外在途周转
+        国内在库周转天数
+        海外周转天数
+        断货率
+
+        注意：
+        如果断货率是 1.67，代表 1.67%
+        那么 outStockRate=1 代表 1%
+
+    targetDays : float
+        海外周转天数目标，例如 90
+
+    outStockRate : float
+        断货率目标，例如 1，代表 1%
+
+    """
+
+    result_df = result_df.sort_values(by="周数").copy()
+
+    weeks = (
+        result_df["周数"]
+        .astype(str)
+        .tolist()
+    )
+
+    overseas_stock = (
+        result_df["海外在库周转"]
+        .fillna(0)
+        .astype(float)
+        .tolist()
+    )
+
+    overseas_transit = (
+        result_df["海外在途周转"]
+        .fillna(0)
+        .astype(float)
+        .tolist()
+    )
+
+    domestic_stock = (
+        result_df["国内在库周转天数"]
+        .fillna(0)
+        .astype(float)
+        .tolist()
+    )
+
+    overseas_days = (
+        result_df["海外周转天数"]
+        .fillna(0)
+        .astype(float)
+        .tolist()
+    )
+
+    out_stock = (
+        result_df["断货率"]
+        .fillna(0)
+        .astype(float)
+        .tolist()
+    )
+
+    # ==========================================================
+    # 2. 颜色配置
+    # ==========================================================
+
+    # 深红
+    OUT_STOCK_RED = "red"
+
+    # 深绿
+    OUT_STOCK_GREEN = "green"
+
+    # 断货率垂直线
+    OUT_STOCK_LINE = "rgba(80, 80, 80, 0.65)"
+
+    # ==========================================================
+    # 3. Y轴范围
+    # ==========================================================
+
+    if overseas_days:
+        max_y = max(overseas_days) + 30
+    else:
+        max_y = 30
+
+    if out_stock:
+        max_out_of_stock = max(out_stock)
+    else:
+        max_out_of_stock = 0
+
+    if max_out_of_stock > 0:
+        upper_limit = max_out_of_stock * 1.5
+    else:
+        upper_limit = 1
+
+    out_stock_data = []
+
+    for value in out_stock:
+
+        if value > outStockRate:
+            color = OUT_STOCK_RED
+        else:
+            color = OUT_STOCK_GREEN
+
+        out_stock_data.append({
+
+            # ECharts scatter 的 Y值
+            "value": value,
+
+            # 点颜色
+            "itemStyle": {
+                "color": color,
+                "borderColor": "white",
+                "borderWidth": 1
+            },
+
+            # 每一个点自己的文字颜色
+            "label": {
+                "show": True,
+                "position": "top",
+                "fontSize": 16,
+                # "fontWeight": "normal",
+                "color": color,
+                "formatter": f"{value:.2f}%"
+            },
+
+            # 防止鼠标 hover 后颜色改变
+            "emphasis": {
+
+                "itemStyle": {
+                    "color": color,
+                    "borderColor": "white",
+                    "borderWidth": 1
+                },
+
+                "label": {
+                    "show": True,
+                    "color": color
+                }
+            }
+        })
+
+    out_stock_mark_lines = []
+
+    for week, value in zip(weeks, out_stock):
+
+        out_stock_mark_lines.append([
+            {
+                "xAxis": week,
+                "yAxis": 0
+            },
+            {
+                "xAxis": week,
+                "yAxis": value
+            }
+        ])
+
+
+    option = {
+        "textStyle": {
+            "fontFamily": "Microsoft YaHei, Arial, sans-serif",
+            "fontSize": 14,
+            "color": "#111111"
+        },
+        # ======================================================
+        # 基础
+        # ======================================================
+
+        "backgroundColor": "white",
+
+        "animation": False,
+
+        # ======================================================
+        # Legend
+        # ======================================================
+
+        "legend": {
+            "show": True,
+
+            "top": 5,
+
+            "left": "center",
+
+            "orient": "horizontal",
+
+            "itemWidth": 18,
+
+            "itemHeight": 10,
+
+            "itemGap": 12,
+
+            "textStyle": {
+                "fontSize": 13,
+                "color": "black",
+                "fontFamily": "Microsoft YaHei"
+            },
+
+            "data": [
+                "海外在库周转",
+                "海外在途周转",
+                "国内在库周转",
+                "海外周转天数",
+                "断货率"
+            ]
+        },
+
+        # ======================================================
+        # Tooltip
+        # ======================================================
+
+        "tooltip": {
+
+            "trigger": "axis",
+
+            "axisPointer": {
+                "type": "shadow"
+            },
+
+            "backgroundColor": "white",
+
+            "borderColor": "#D5D8DC",
+
+            "borderWidth": 1,
+
+            "textStyle": {
+                "fontFamily": "Microsoft YaHei",
+                "fontSize": 12,
+                "color": "black"
+            },
+
+            "formatter": JsCode(
+                """
+                function(params) {
+
+                    if (!params || params.length === 0) {
+                        return '';
+                    }
+
+                    var html =
+                        '周数: ' +
+                        params[0].axisValue;
+
+                    params.forEach(function(item) {
+
+                        var seriesName = item.seriesName;
+
+                        // 忽略辅助线
+                        if (
+                            seriesName === '断货率辅助线' ||
+                            seriesName === '目标'
+                        ) {
+                            return;
+                        }
+
+                        var value = item.value;
+
+                        // scatter
+                        // value 是一个数字
+                        if (
+                            seriesName === '断货率'
+                        ) {
+
+                            if (
+                                value !== undefined &&
+                                value !== null
+                            ) {
+
+                                html +=
+                                    '<br/>' +
+                                    item.marker +
+                                    seriesName +
+                                    ': ' +
+                                    Number(value).toFixed(2) +
+                                    '%';
+                            }
+
+                            return;
+                        }
+
+                        // bar / line
+                        if (
+                            value !== undefined &&
+                            value !== null
+                        ) {
+
+                            html +=
+                                '<br/>' +
+                                item.marker +
+                                seriesName +
+                                ': ' +
+                                Number(value).toFixed(1);
+                        }
+
+                    });
+
+                    return html;
+                }
+                """
+            )
+        },
+
+        # ======================================================
+        # Grid
+        # ======================================================
+
+        "grid": [
+
+            # --------------------------------------------------
+            # 上半部分：断货率
+            # --------------------------------------------------
+
+            {
+                "left": "4%",
+                "right": "4%",
+                "top": "11%",
+                "height": "21%"
+            },
+
+            # --------------------------------------------------
+            # 下半部分：周转
+            # --------------------------------------------------
+
+            {
+                "left": "4%",
+                "right": "4%",
+                "top": "36%",
+                "bottom": "14%",
+                "height": "51%"
+            }
+        ],
+
+        # ======================================================
+        # X Axis
+        # ======================================================
+
+        "xAxis": [
+
+            # --------------------------------------------------
+            # 上面的 X Axis
+            # --------------------------------------------------
+
+            {
+                "type": "category",
+
+                "gridIndex": 0,
+
+                "data": weeks,
+
+                "show": False
+            },
+
+            # --------------------------------------------------
+            # 下面的 X Axis
+            # --------------------------------------------------
+
+            {
+                "type": "category",
+
+                "gridIndex": 1,
+
+                "data": weeks,
+
+                "axisLabel": {
+                    "show": True,
+                    "fontSize": 14,
+                    "color": "black",
+                    "fontFamily": "Microsoft YaHei",
+
+                    # 防止标签太多重叠
+                    "interval": 0
+                },
+
+                "axisLine": {
+                    "show": True,
+
+                    "lineStyle": {
+                        "color": "#777777",
+                        "width": 1
+                    }
+                },
+
+                "axisTick": {
+                    "show": True
+                }
+            }
+        ],
+
+        # ======================================================
+        # Y Axis
+        # ======================================================
+
+        "yAxis": [
+
+            # --------------------------------------------------
+            # 上面：断货率
+            # --------------------------------------------------
+
+            {
+                "type": "value",
+
+                "gridIndex": 0,
+
+                "min": 0,
+
+                "max": upper_limit,
+
+                "show": False,
+
+                "splitLine": {
+                    "show": False
+                },
+
+                "axisLine": {
+                    "show": False
+                },
+
+                "axisTick": {
+                    "show": False
+                }
+            },
+
+            # --------------------------------------------------
+            # 下面：周转天数
+            # --------------------------------------------------
+
+            {
+                "type": "value",
+
+                "gridIndex": 1,
+
+                "min": 0,
+
+                "max": max_y,
+
+                "name": "周转天数",
+
+                "nameLocation": "middle",
+
+                "nameGap": 35,
+
+                "nameTextStyle": {
+                    "fontSize": 15,
+                    "color": "black",
+                    "fontFamily": "Microsoft YaHei"
+                },
+
+                "axisLabel": {
+                    "fontSize": 15,
+                    "color": "black"
+                },
+
+                "splitLine": {
+                    "show": True,
+
+                    "lineStyle": {
+                        "color": "#DDDDDD",
+                        "width": 1
+                    }
+                },
+
+                "axisLine": {
+                    "show": True,
+
+                    "lineStyle": {
+                        "color": "#777777"
+                    }
+                },
+
+                "axisTick": {
+                    "show": True
+                }
+            }
+        ],
+
+        # ======================================================
+        # Series
+        # ======================================================
+
+        "series": [
+
+            # ==================================================
+            # 1. 断货率
+            # ==================================================
+
+            {
+                "name": "断货率",
+
+                "type": "scatter",
+
+                "xAxisIndex": 0,
+
+                "yAxisIndex": 0,
+
+                "data": out_stock_data,
+
+                "symbol": "circle",
+
+                "symbolSize": 14,
+
+                # 点放在垂直线前面
+                "z": 10,
+
+                # ------------------------------------------------
+                # 所有断货率垂直线
+                # ------------------------------------------------
+
+                "markLine": {
+
+                    "silent": True,
+
+                    "symbol": "none",
+
+                    "data": out_stock_mark_lines,
+
+                    "lineStyle": {
+                        "color": OUT_STOCK_LINE,
+                        "width": 1.2,
+                        "type": "solid"
+                    },
+
+                    "label": {
+                        "show": False
+                    },
+
+                    "z": 1
+                },
+
+                # ------------------------------------------------
+                # Hover
+                # ------------------------------------------------
+
+                "emphasis": {
+
+                    "scale": True,
+
+                    "itemStyle": {
+                        "borderColor": "white",
+                        "borderWidth": 1
+                    },
+                    "textStyle": {
+                        "fontFamily": "Microsoft YaHei, Arial, sans-serif",
+                        "fontSize": 14,
+                        "color": "#111111"
+                    },
+                }
+            },
+
+            # ==================================================
+            # 2. 海外在库周转
+            # ==================================================
+
+            {
+                "name": "海外在库周转",
+
+                "type": "bar",
+
+                "xAxisIndex": 1,
+
+                "yAxisIndex": 1,
+
+                "data": overseas_stock,
+
+                "barMaxWidth": 28,
+
+                "barGap": "10%",
+
+                "itemStyle": {
+                    "color": "#85C1E9"
+                },
+
+                "label": {
+
+                    "show": True,
+
+                    "position": "top",
+
+                    "fontSize": 15,
+
+                    "color": "black",
+
+                    "formatter": JsCode(
+                        """
+                        function(params) {
+                            return Number(params.value).toFixed(1);
+                        }
+                        """
+                    )
+                }
+            },
+
+            # ==================================================
+            # 3. 海外在途周转
+            # ==================================================
+
+            {
+                "name": "海外在途周转",
+
+                "type": "bar",
+
+                "xAxisIndex": 1,
+
+                "yAxisIndex": 1,
+
+                "data": overseas_transit,
+
+                "barMaxWidth": 28,
+
+                "itemStyle": {
+                    "color": "#F8C471"
+                },
+
+                "label": {
+
+                    "show": True,
+
+                    "position": "top",
+
+                    "fontSize": 15,
+
+                    "color": "black",
+
+                    "formatter": JsCode(
+                        """
+                        function(params) {
+                            return Number(params.value).toFixed(1);
+                        }
+                        """
+                    )
+                }
+            },
+
+            # ==================================================
+            # 4. 国内在库周转
+            # ==================================================
+
+            {
+                "name": "国内在库周转",
+
+                "type": "bar",
+
+                "xAxisIndex": 1,
+
+                "yAxisIndex": 1,
+
+                "data": domestic_stock,
+
+                "barMaxWidth": 28,
+
+                "itemStyle": {
+                    "color": "#BFC9CA"
+                },
+
+                "label": {
+
+                    "show": True,
+
+                    "position": "top",
+
+                    "fontSize": 15,
+
+                    "color": "black",
+
+                    "formatter": JsCode(
+                        """
+                        function(params) {
+                            return Number(params.value).toFixed(1);
+                        }
+                        """
+                    )
+                }
+            },
+
+            # ==================================================
+            # 5. 海外周转天数
+            # ==================================================
+
+            {
+                "name": "海外周转天数",
+
+                "type": "line",
+
+                "xAxisIndex": 1,
+
+                "yAxisIndex": 1,
+
+                "data": overseas_days,
+
+                "symbol": "circle",
+
+                "symbolSize": 9,
+
+                "smooth": False,
+
+                "lineStyle": {
+
+                    "color": "#2E8421",
+
+                    "width": 2
+                },
+
+                "itemStyle": {
+
+                    "color": "#2E8421"
+                },
+
+                "label": {
+
+                    "show": True,
+
+                    "position": "top",
+
+                    "fontSize": 15,
+
+                    "color": "black",
+
+                    "formatter": JsCode(
+                        """
+                        function(params) {
+                            return Number(params.value).toFixed(1);
+                        }
+                        """
+                    )
+                },
+
+                # ==================================================
+                # 目标线
+                # ==================================================
+
+                "markLine": {
+
+                    "silent": True,
+
+                    "symbol": "none",
+
+                    "lineStyle": {
+
+                        "type": "dashed",
+
+                        "color": "#CC0033",
+
+                        "width": 1.5,
+
+                        "opacity": 0.8
+                    },
+
+                    "label": {
+
+                        "show": True,
+
+                        "position": "insideEndTop",
+
+                        "color": "#CC0033",
+
+                        "fontSize": 15,
+
+                        "formatter": f"目标: {targetDays}天"
+                    },
+
+                    "data": [
+
+                        {
+                            "yAxis": targetDays
+                        }
+
+                    ]
+                }
+            }
+        ],
+
+        # ======================================================
+        # DataZoom
+        # ======================================================
+
+        "dataZoom": [
+
+            # --------------------------------------------------
+            # 底部滑动条
+            # --------------------------------------------------
+
+            {
+                "type": "slider",
+                "xAxisIndex": [0, 1],
+                "startValue": max(0, len(weeks) - 16),
+                "endValue": len(weeks) - 1,
+                "bottom": 5,
+                "height": 20,
+                "backgroundColor": "#F4F6F7",
+                "borderColor": "#D5D8DC",
+                "fillerColor": "rgba(133,193,233,0.30)",
+                "handleSize": "100%",
+                "handleStyle": {
+                    "color": "#85C1E9",
+                    "borderColor": "#5DADE2"
+                },
+                "textStyle": {
+                    "color": "#555555",
+                    "fontSize": 11
+                }
+            }
+        ]
+    }
+
+    # ==========================================================
+    # 7. Streamlit 渲染
+    # ==========================================================
+
+    # st_echarts(
+    #     options=option,
+    #     height="600px",
+    #     width="100%",
+    #     renderer="svg",
+    #     key="整体指标分层级"
+    # )
+    return option
 
 
 @st.fragment
@@ -323,11 +1158,16 @@ def actual_turnover_area(df_海外周转, df_国内在库周转, df_断货率,df
     targetDays_TOP10 = df_海外周转目标[df_海外周转目标['层级']=='TOP10']['海外周转目标By220'].values[0]
     targetDays_TOP20 = df_海外周转目标[df_海外周转目标['层级']=='TOP20']['海外周转目标By220'].values[0]
     targetDays_普通 = df_海外周转目标[df_海外周转目标['层级']=='普通']['海外周转目标By220'].values[0]
-    fig_历史周转_TOP0 = 整体指标分层级(result_df[result_df['层级']=='TOP0'],targetDays_TOP0,1)
-    fig_历史周转_TOP1 = 整体指标分层级(result_df[result_df['层级']=='TOP1'],targetDays_TOP1,2)
-    fig_历史周转_TOP10 = 整体指标分层级(result_df[result_df['层级']=='TOP10'],targetDays_TOP10,4)
-    fig_历史周转_TOP20 = 整体指标分层级(result_df[result_df['层级']=='TOP20'],targetDays_TOP20,6)
-    fig_历史周转_普通 = 整体指标分层级(result_df[result_df['层级']=='普通'],targetDays_普通,7.4)
+    # fig_历史周转_TOP0 = 整体指标分层级(result_df[result_df['层级']=='TOP0'],targetDays_TOP0,1)
+    # fig_历史周转_TOP1 = 整体指标分层级(result_df[result_df['层级']=='TOP1'],targetDays_TOP1,2)
+    # fig_历史周转_TOP10 = 整体指标分层级(result_df[result_df['层级']=='TOP10'],targetDays_TOP10,4)
+    # fig_历史周转_TOP20 = 整体指标分层级(result_df[result_df['层级']=='TOP20'],targetDays_TOP20,6)
+    # fig_历史周转_普通 = 整体指标分层级(result_df[result_df['层级']=='普通'],targetDays_普通,7.4)
+    fig_历史周转_TOP0=render_inventory_echarts(result_df[result_df['层级']=='TOP0'],targetDays_TOP0,1)
+    fig_历史周转_TOP1= render_inventory_echarts(result_df[result_df['层级']=='TOP1'],targetDays_TOP1,2)
+    fig_历史周转_TOP10= render_inventory_echarts(result_df[result_df['层级']=='TOP10'],targetDays_TOP10,4)
+    fig_历史周转_TOP20= render_inventory_echarts(result_df[result_df['层级']=='TOP20'],targetDays_TOP20,6)
+    fig_历史周转_普通= render_inventory_echarts(result_df[result_df['层级']=='普通'],targetDays_普通,7.4)
     return fig_历史周转_TOP0, fig_历史周转_TOP1, fig_历史周转_TOP10, fig_历史周转_TOP20, fig_历史周转_普通
 
 def 子市场指标分层级(result_df,targetDays,outStockRate):
@@ -855,23 +1695,58 @@ if st.session_state.df_海外周转 is not None:
     fig_历史周转_TOP0, fig_历史周转_TOP1, fig_历史周转_TOP10, fig_历史周转_TOP20, fig_历史周转_普通 = actual_turnover_area(st.session_state.df_海外周转, st.session_state.df_国内在库周转, st.session_state.df_断货率,st.session_state.df_海外周转目标)
     fig_子市场指标_TOP0, fig_子市场指标_TOP1, fig_子市场指标_TOP10, fig_子市场指标_TOP20, fig_子市场指标_普通 = delivery_stock_area(st.session_state.df_海外周转, st.session_state.df_断货率,st.session_state.df_海外周转目标)
     st.header("📈 TOP0", anchor="1")
-    st.plotly_chart(fig_历史周转_TOP0, width='stretch',key="fig_历史周转_TOP0")
+    # st.plotly_chart(fig_历史周转_TOP0, width='stretch',key="fig_历史周转_TOP0")
+    st_echarts(
+        options=fig_历史周转_TOP0,
+        height="600px",
+        width="100%",
+        renderer="svg",
+        key="fig_历史周转_TOP0",
+    )
     st.plotly_chart(fig_子市场指标_TOP0, width='stretch',key="fig_子市场指标_TOP0")
     st.divider()
     st.header("📈 TOP1", anchor="1")
-    st.plotly_chart(fig_历史周转_TOP1, width='stretch',key="fig_历史周转_TOP1")
+    # st.plotly_chart(fig_历史周转_TOP1, width='stretch',key="fig_历史周转_TOP1")
+    st_echarts(
+        options=fig_历史周转_TOP1,
+        height="600px",
+        width="100%",
+        renderer="svg",
+        key="fig_历史周转_TOP1",
+    )
     st.plotly_chart(fig_子市场指标_TOP1, width='stretch',key="fig_子市场指标_TOP1")
     st.divider()
     st.header("📈 TOP10", anchor="1")
-    st.plotly_chart(fig_历史周转_TOP10, width='stretch',key="fig_历史周转_TOP10")
+    # st.plotly_chart(fig_历史周转_TOP10, width='stretch',key="fig_历史周转_TOP10")
+    st_echarts(
+        options=fig_历史周转_TOP10,
+        height="600px",
+        width="100%",
+        renderer="svg",
+        key="fig_历史周转_TOP10",
+    )
     st.plotly_chart(fig_子市场指标_TOP10, width='stretch',key="fig_子市场指标_TOP10")
     st.divider()
     st.header("📈 TOP20", anchor="1")
-    st.plotly_chart(fig_历史周转_TOP20, width='stretch',key="fig_历史周转_TOP20")
+    # st.plotly_chart(fig_历史周转_TOP20, width='stretch',key="fig_历史周转_TOP20")
+    st_echarts(
+        options=fig_历史周转_TOP20,
+        height="600px",
+        width="100%",
+        renderer="svg",
+        key="fig_历史周转_TOP20",
+    )
     st.plotly_chart(fig_子市场指标_TOP20, width='stretch',key="fig_子市场指标_TOP20")
     st.divider()
     st.header("📈 普通", anchor="1")
-    st.plotly_chart(fig_历史周转_普通, width='stretch',key="fig_历史周转_普通")
+    # st.plotly_chart(fig_历史周转_普通, width='stretch',key="fig_历史周转_普通")
+    st_echarts(
+        options=fig_历史周转_普通,
+        height="600px",
+        width="100%",
+        renderer="svg",
+        key="fig_历史周转_普通",
+    )
     st.plotly_chart(fig_子市场指标_普通, width='stretch',key="fig_子市场指标_普通")
     st.divider()
     
