@@ -6,3 +6,4 @@ openpyxl
 numpy
 fastexcel
 xlsxwriter
+streamlit_echarts
