@@ -1170,7 +1170,7 @@ def actual_turnover_area(df_海外周转, df_国内在库周转, df_断货率,df
     fig_历史周转_普通= render_inventory_echarts(result_df[result_df['层级']=='普通'],targetDays_普通,7.4)
     return fig_历史周转_TOP0, fig_历史周转_TOP1, fig_历史周转_TOP10, fig_历史周转_TOP20, fig_历史周转_普通
 
-def 子市场指标分层级(result_df,targetDays,outStockRate):
+def 子市场指标分层级(result_df,outStockRate):
     mc_level = result_df['层级'].unique()[0]
     df_sorted_temp = result_df.sort_values(['子市场', '周数'])
     latest_sku_map = df_sorted_temp.groupby('子市场')['SKU数量'].last()
@@ -1193,6 +1193,8 @@ def 子市场指标分层级(result_df,targetDays,outStockRate):
         specs=[[{"secondary_y": False}], [{"secondary_y": False}]]
     )
     result_df['周数new'] = result_df["周数"].str[2:]
+    latest_data = result_df[result_df['周数'] == result_df['周数'].max()]
+    target_map = latest_data.drop_duplicates('子市场').set_index('子市场')['子市场周转目标By220'].to_dict()
     result_df["子市场_new"] = (
         result_df["子市场"].astype(str)
         + "<br>"
@@ -1201,7 +1203,7 @@ def 子市场指标分层级(result_df,targetDays,outStockRate):
         + "  个)"
         + "<br>"
         + "(目标： "
-        + str(targetDays)
+        + result_df["子市场"].map(target_map).astype(str)
         + " 天)"
         + "<br>"
     )
@@ -1425,6 +1427,7 @@ def delivery_stock_area(df_海外周转, df_断货率, df_海外周转目标):
          期末在途金额 = ("期末在途金额", "sum"),
          周销售出库金额 = ("周销售出库金额", "sum"),
          SKU数量 = ("SKU数量", "sum"),
+         子市场周转目标By220 = ("子市场周转目标By220", "first")
     ).reset_index()
     df_hw['海外在库周转'] = ((df_hw['期末库存金额'] + df_hw['期初库存金额'])/2 / (df_hw['周销售出库金额']/7+0.001)).round(2)
     df_hw['海外在途周转'] = ((df_hw['期末在途金额'] + df_hw['期初在途金额'])/2 / (df_hw['周销售出库金额']/7+0.001)).round(2)
@@ -1445,26 +1448,26 @@ def delivery_stock_area(df_海外周转, df_断货率, df_海外周转目标):
     result_df = result_df.reset_index(drop=True)
     six_weeks = result_df['周数'].sort_values().unique()[-4:]
     result_df = result_df[result_df['周数'].isin(six_weeks)]
-    targetDays_TOP0 = df_海外周转目标[df_海外周转目标["层级"] == "TOP0"][
-        "海外周转目标By220"
-    ].values[0]
-    targetDays_TOP1 = df_海外周转目标[df_海外周转目标["层级"] == "TOP1"][
-        "海外周转目标By220"
-    ].values[0]
-    targetDays_TOP10 = df_海外周转目标[df_海外周转目标["层级"] == "TOP10"][
-        "海外周转目标By220"
-    ].values[0]
-    targetDays_TOP20 = df_海外周转目标[df_海外周转目标["层级"] == "TOP20"][
-        "海外周转目标By220"
-    ].values[0]
-    targetDays_普通 = df_海外周转目标[df_海外周转目标["层级"] == "普通"][
-        "海外周转目标By220"
-    ].values[0]
-    fig_子市场指标_TOP0 = 子市场指标分层级(result_df[result_df['层级']=='TOP0'],targetDays_TOP0,0.01)
-    fig_子市场指标_TOP1 = 子市场指标分层级(result_df[result_df['层级']=='TOP1'],targetDays_TOP1,0.02)
-    fig_子市场指标_TOP10 = 子市场指标分层级(result_df[result_df['层级']=='TOP10'],targetDays_TOP10,0.04)
-    fig_子市场指标_TOP20 = 子市场指标分层级(result_df[result_df['层级']=='TOP20'],targetDays_TOP20,0.06)
-    fig_子市场指标_普通 = 子市场指标分层级(result_df[result_df['层级']=='普通'],targetDays_普通,0.074)
+    # targetDays_TOP0 = df_海外周转目标[df_海外周转目标["层级"] == "TOP0"][
+    #     "海外周转目标By220"
+    # ].values[0]
+    # targetDays_TOP1 = df_海外周转目标[df_海外周转目标["层级"] == "TOP1"][
+    #     "海外周转目标By220"
+    # ].values[0]
+    # targetDays_TOP10 = df_海外周转目标[df_海外周转目标["层级"] == "TOP10"][
+    #     "海外周转目标By220"
+    # ].values[0]
+    # targetDays_TOP20 = df_海外周转目标[df_海外周转目标["层级"] == "TOP20"][
+    #     "海外周转目标By220"
+    # ].values[0]
+    # targetDays_普通 = df_海外周转目标[df_海外周转目标["层级"] == "普通"][
+    #     "海外周转目标By220"
+    # ].values[0]
+    fig_子市场指标_TOP0 = 子市场指标分层级(result_df[result_df['层级']=='TOP0'],0.01)
+    fig_子市场指标_TOP1 = 子市场指标分层级(result_df[result_df['层级']=='TOP1'],0.02)
+    fig_子市场指标_TOP10 = 子市场指标分层级(result_df[result_df['层级']=='TOP10'],0.04)
+    fig_子市场指标_TOP20 = 子市场指标分层级(result_df[result_df['层级']=='TOP20'],0.06)
+    fig_子市场指标_普通 = 子市场指标分层级(result_df[result_df['层级']=='普通'],0.074)
     return fig_子市场指标_TOP0, fig_子市场指标_TOP1, fig_子市场指标_TOP10, fig_子市场指标_TOP20, fig_子市场指标_普通
 
 def 整体堆积柱状图(df_海外周转, df_国内在库周转, df_断货率, targetDays1, targetDays2, outStockRate):
